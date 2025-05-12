@@ -26,15 +26,21 @@ indice_rosto = 0
 fonte_botao = pygame.font.SysFont("arial", 32, bold=True)
 rotulos = ["Estou bem", "Me sinto triste", "Sair"]
 
-# Parâmetros dos botões
-largura_botao = 280
-altura_botao = 200
-espaco = 40
+# Proporções relativas à tela
+espaco = largura * 0.02  # 2% da largura para espaçamento entre botões
+margem_lateral = largura * 0.05  # 5% da largura como margem lateral
+altura_botao = altura * 0.18     # 18% da altura para altura dos botões
 
-# Calcular posição horizontal centralizada
-total_largura = len(rotulos) * largura_botao + (len(rotulos) - 1) * espaco
+# Largura do botão baseada na largura total disponível
+total_largura_util = largura - 2 * margem_lateral
+largura_botao = (total_largura_util - espaco * 2) / 3  # 3 botões, 2 espaços
+
+# Centraliza grupo de botões horizontalmente
+total_largura = largura_botao * 3 + espaco * 2
 inicio_x = (largura - total_largura) // 2
-pos_y = altura - 200
+
+# Posição vertical dos botões (ex: 70% da altura da tela)
+pos_y = altura - altura * 0.2
 
 botoes = []
 for i, rotulo in enumerate(rotulos):
