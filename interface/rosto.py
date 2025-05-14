@@ -178,7 +178,7 @@ def main():
 
         x_off = math.cos(tempo*2) * 10
         y_off = math.sin(tempo*2) * 20
-        centro = (largura // 2 + int(x_off), int(altura//2 + int(y_off))
+        centro = (largura // 2 + int(x_off), int(altura//2) + int(y_off))
         desenhar_rosto(screen, fonte_rosto, indice_rosto, centro)
         desenhar_botoes_fade(
             screen, botoes, fonte_botao, indice_selecionado,
