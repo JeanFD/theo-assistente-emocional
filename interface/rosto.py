@@ -6,9 +6,10 @@ BRANCO      = (255, 255, 255)
 PRETO       = (0,     0,   0)
 AZUL        = (70,  130, 180)
 CINZA       = (200, 200, 200)
-SELECIONADO = (100, 149, 237)
+SELECIONADO = ( 50, 175, 200)
 
-ROSTO_BASE = ["O-O", "^-^"]
+
+ROSTO_BASE = ["O - O", "^ - ^"]
 
 def inicializar_pygame():
     pygame.init()
@@ -53,8 +54,7 @@ def desenhar_botoes(screen, botoes, fonte_botao, indice_selecionado):
 def desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado,
                         animation_start, fade_duration, delay_between):
     now = pygame.time.get_ticks()
-    for i, (rect, rotulo) in enumerate(botoes):
-        # 1) calcula alpha
+    for i, (botao, rotulo) in enumerate(botoes):
         t_i = now - (animation_start + i * delay_between)
         if t_i <= 0:
             alpha = 0
@@ -63,19 +63,16 @@ def desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado,
         else:
             alpha = int(255 * (t_i / fade_duration))
 
-        # 2) prepara surface transparente
-        surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        surf = pygame.Surface((botao.width, botao.height), pygame.SRCALPHA)
         cor = SELECIONADO if i == indice_selecionado else CINZA
         surf.fill((*cor, alpha))
 
-        # 3) renderiza texto com o mesmo alpha
         txt = fonte_botao.render(rotulo, True, BRANCO)
         txt.set_alpha(alpha)
-        txt_rect = txt.get_rect(center=(rect.width // 2, rect.height // 2))
+        txt_rect = txt.get_rect(center=(botao.width // 2, botao.height // 2))
         surf.blit(txt, txt_rect)
 
-        # 4) desenha no screen
-        screen.blit(surf, (rect.x, rect.y))
+        screen.blit(surf, (botao.x, botao.y))
 
 def manipular_entrada(evento, botoes, indice_selecionado):
     running = True
@@ -102,9 +99,9 @@ def manipular_entrada(evento, botoes, indice_selecionado):
 def main():
     screen, clock = inicializar_pygame()
     largura, altura = screen.get_size()
-    fonte_rosto = pygame.font.SysFont("Arial", int(altura * 0.5), bold=True)
+    fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.5), bold=True)
     fonte_botao = pygame.font.SysFont("Arial", int(altura * 0.05), bold=True)
-    rotulos = ["Estou bem", "Estou triste", "Sair"]
+    rotulos = ["1", "2"]
     botoes = create_buttons(largura, altura, rotulos)
 
     animation_start = pygame.time.get_ticks()
