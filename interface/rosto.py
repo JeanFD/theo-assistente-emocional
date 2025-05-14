@@ -8,6 +8,9 @@ AZUL        = (70,  130, 180)
 CINZA       = (200, 200, 200)
 SELECIONADO = ( 50, 175, 200)
 
+FADE_T      = 0.5          # s de fade‑in e fade‑out
+SHOW_T      = 2.5          # s totalmente visível
+T_TOTAL     = 2*FADE_T+SHOW_T
 
 ROSTO_BASE = ["O - O", "^ - ^"]
 
@@ -18,18 +21,30 @@ def inicializar_pygame():
     clock = pygame.time.Clock()
     return screen, clock
 
-def create_buttons(screen_width, screen_height, rotulos):
-    margem = screen_width * 0.05
-    espaco = screen_width * 0.02
-    altura_botao = screen_height * 0.18
-    largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
-    y = screen_height - screen_height * 0.2
-    botoes = []
-    x0 = (screen_width - (3*largura_botao + 2*espaco)) / 2
-    for i, rtl in enumerate(rotulos):
-        botao = pygame.Rect(x0 + i * (largura_botao + espaco), y, largura_botao, altura_botao)
-        botoes.append((botao, rtl))
-    return botoes
+def desenhar_frase(screen, fonte, texto, t_decorrido, centro):
+    # if t_decorrido > T_TOTAL:           # já terminou
+    #     return False                    # sinaliza que não precisa mais exibir
+
+    # # calcula alpha
+    # if t_decorrido < FADE_T:            # fade‑in
+    #     alpha = int(255 * t_decorrido/FADE_T)
+    #     y_off = 30 * (1 - t_decorrido/FADE_T)   # sobe levemente
+    # elif t_decorrido > FADE_T + SHOW_T:  # fade‑out
+    #     alpha = int(255 * (1 - (t_decorrido-FADE_T-SHOW_T)/FADE_T))
+    #     y_off = 0
+    # else:                               # totalmente visível
+    #     alpha = 255
+    #     y_off = 0
+
+    # surf = fonte.render(texto, True, PRETO)
+    # # surf.set_alpha(alpha)
+    # rect = surf.get_rect(center=(screen.get_width()//2, centro_rosto_y))
+    # screen.blit(surf, rect)
+
+    texto = fonte.render(texto, True, PRETO)
+    screen.blit(texto, texto.get_rect(center=(centro[0]//2, centro[1]*0.08)))
+
+    return True
 
 def desenhar_rosto(screen, fonte, estado, centro):
     texto = fonte.render(ROSTO_BASE[estado], True, PRETO)
@@ -41,6 +56,19 @@ def atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando):
     elif piscando and (tempo - ultimo_tempo_troca >= 0.3):
         return 0, tempo, False
     return None
+
+def create_buttons(screen_width, screen_height, rotulos):
+    margem = screen_width * 0.05
+    espaco = screen_width * 0.02
+    altura_botao = screen_height * 0.18
+    largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
+    y = screen_height - screen_height * 0.2
+    botoes = []
+    x0 = (screen_width - (len(rotulos)*largura_botao + (len(rotulos)-1)*espaco)) / 2
+    for i, rtl in enumerate(rotulos):
+        botao = pygame.Rect(x0 + i * (largura_botao + espaco), y, largura_botao, altura_botao)
+        botoes.append((botao, rtl))
+    return botoes
 
 def desenhar_botoes(screen, botoes, fonte_botao, indice_selecionado):
     for i, (botao, rotulo) in enumerate(botoes):
@@ -101,7 +129,11 @@ def main():
     largura, altura = screen.get_size()
     fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.5), bold=True)
     fonte_botao = pygame.font.SysFont("Arial", int(altura * 0.05), bold=True)
-    rotulos = ["1", "2"]
+    fonte_frase = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+
+    mensagem_atual  = None     # texto
+    inicio_mensagem = 0 
+    rotulos = ["1", "2", "3"]
     botoes = create_buttons(largura, altura, rotulos)
 
     animation_start = pygame.time.get_ticks()
@@ -115,12 +147,11 @@ def main():
     indice_selecionado = 0
     running = True
 
-
-
     while running:
         dt = clock.tick(60) / 1000.0  # segundos desde último frame
         tempo += dt
 
+        screen.fill(BRANCO)
         resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando)
         if resultado:
             indice_rosto, ultimo_tempo_troca, piscando = resultado
@@ -131,9 +162,20 @@ def main():
             else:
                 indice_selecionado, running, msg = manipular_entrada(evt, botoes, indice_selecionado)
                 if msg:
-                    print(msg)
+                    print (msg)
+                    mensagem_atual  = msg
+                    inicio_mensagem = tempo
 
-        screen.fill(BRANCO)
+        if mensagem_atual:
+            ativo = desenhar_frase(
+                screen, fonte_frase, mensagem_atual,
+                tempo - inicio_mensagem,
+                (largura, altura)                     # y do rosto
+            )
+            if not ativo:
+                mensagem_atual = None
+
+
         x_off = math.cos(tempo*2) * 10
         y_off = math.sin(tempo*2) * 20
         centro = (largura // 2 + int(x_off), int(altura*0.4) + int(y_off))
