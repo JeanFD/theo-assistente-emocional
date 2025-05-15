@@ -2,6 +2,7 @@ import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 from interface.rosto import desenhar_rosto, atualizar_estado_rosto
+from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
 
 FADE_T = 0.3   
@@ -44,7 +45,8 @@ def main():
     indice_rosto = 0
     ultimo_tempo_troca = 0
     piscando = False
-    falando = True
+    tts = TTS(rate=150)                                       
+    ultimo_texto = ""
 
     fade_start_ms = pygame.time.get_ticks()
     duration_ms   = int(FADE_T * 1000)
@@ -68,12 +70,10 @@ def main():
             text = "Em escala de 1 a 5, quão forte é?"
         else:
             botoes = []
-            text = "Obrigada, aguardarei os próximos registros"
+            text = "Obrigada, aguardarei os próximos registros"       
 
 
-        resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando, falando)
-        if resultado:
-            rosto, ultimo_tempo_troca, piscando = resultado
+       
         
 
         clicked = None
@@ -159,7 +159,18 @@ def main():
 
         screen.fill(BRANCO)      
         desenhar_frase(screen, fonte_frase, text)
-        desenhar_rosto(screen, fonte_rosto, rosto, tempo)
+
+        if text != ultimo_texto:
+            print("Chamou")
+            tts.speak(text)
+            ultimo_texto = text
+        falando = tts.speaking
+
+        resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando, falando)
+        if resultado:
+            indice_rosto, ultimo_tempo_troca, piscando = resultado
+
+        desenhar_rosto(screen, fonte_rosto, indice_rosto, tempo)
 
         if botoes:
             desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado, fade_start_ms, duration_ms, delay_ms)
