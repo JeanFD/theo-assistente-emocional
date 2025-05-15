@@ -44,7 +44,7 @@ def main():
     indice_rosto = 0
     ultimo_tempo_troca = 0
     piscando = False
-    falando = False
+    falando = True
 
     fade_start_ms = pygame.time.get_ticks()
     duration_ms   = int(FADE_T * 1000)
