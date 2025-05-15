@@ -44,6 +44,7 @@ def main():
     indice_rosto = 0
     ultimo_tempo_troca = 0
     piscando = False
+    falando = False
 
     fade_start_ms = pygame.time.get_ticks()
     duration_ms   = int(FADE_T * 1000)
@@ -53,7 +54,6 @@ def main():
     while running:
         dt = clock.tick(60) / 1000.0
         tempo += dt
-        
         if estado == Estado.INICIO:
             botoes = btn_inicio
             text = "O que deseja fazer?"
@@ -71,9 +71,9 @@ def main():
             text = "Obrigada, aguardarei os próximos registros"
 
 
-        resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando)
+        resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando, falando)
         if resultado:
-            indice_rosto, ultimo_tempo_troca, piscando = resultado
+            rosto, ultimo_tempo_troca, piscando = resultado
         
 
         clicked = None
@@ -159,7 +159,7 @@ def main():
 
         screen.fill(BRANCO)      
         desenhar_frase(screen, fonte_frase, text)
-        desenhar_rosto(screen, fonte_rosto, indice_rosto, tempo)
+        desenhar_rosto(screen, fonte_rosto, rosto, tempo)
 
         if botoes:
             desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado, fade_start_ms, duration_ms, delay_ms)
