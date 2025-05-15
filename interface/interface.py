@@ -1,17 +1,13 @@
 import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
+from interface.rosto import desenhar_rosto, atualizar_estado_rosto
 
-BRANCO      = (255, 255, 255)
-PRETO       = (0,     0,   0)
-AZUL        = (70,  130, 180)
-CINZA       = (200, 200, 200)
-SELECIONADO = ( 50, 175, 200)
+FADE_T = 0.3   
+DELAY_BTWN = 0.2
 
-FADE_T      = 0.5   
-DELAY_BTWN  = 0.5
+BRANCO = (255, 255, 255)
 
-ROSTO_BASE = ["O - O", "^ - ^"]
 
 class Estado(Enum):
     INICIO = auto()
@@ -26,20 +22,6 @@ def inicializar_pygame():
     screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
     clock = pygame.time.Clock()
     return screen, clock
-
-
-def desenhar_rosto(screen, fonte, estado, tempo):
-    x_off = math.cos(tempo*2) * 10
-    y_off = math.sin(tempo*2) * 20
-    surf = fonte.render(ROSTO_BASE[estado], True, PRETO)
-    screen.blit(surf, surf.get_rect(center=((screen.get_width()//2)+x_off, (screen.get_height()//2)+y_off)))
-
-def atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando):
-    if not piscando and (tempo - ultimo_tempo_troca >= 2.4):
-        return 1, tempo, True
-    elif piscando and (tempo - ultimo_tempo_troca >= 0.3):
-        return 0, tempo, False
-    return None
 
 def main():
     screen, clock = inicializar_pygame()

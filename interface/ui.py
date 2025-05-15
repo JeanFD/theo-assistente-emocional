@@ -1,9 +1,9 @@
 import pygame
 
 # Constantes de cor
-BRANCO      = (255, 255, 255)
-PRETO       = (0,     0,   0)
-CINZA       = (200, 200, 200)
+BRANCO = (255, 255, 255)
+PRETO = (0, 0, 0)
+CINZA = (200, 200, 200)
 SELECIONADO = (50, 175, 200)
 
 
