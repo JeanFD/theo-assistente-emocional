@@ -2,6 +2,7 @@ import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 from interface.rosto import desenhar_rosto, atualizar_estado_rosto
+from comunicacao.envio_dados import enviar_servidor
 
 FADE_T = 0.3   
 DELAY_BTWN = 0.2
@@ -152,6 +153,7 @@ def main():
             
             if estado == Estado.OBRIGADO:
                 print(registro)
+                enviar_servidor(registro)
                 inicio_mensagem = tempo
             fade_start_ms = pygame.time.get_ticks()
 
