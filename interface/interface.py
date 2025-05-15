@@ -1,5 +1,6 @@
 import pygame, sys, math
 from enum import Enum, auto
+from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 
 BRANCO      = (255, 255, 255)
 PRETO       = (0,     0,   0)
@@ -26,28 +27,6 @@ def inicializar_pygame():
     clock = pygame.time.Clock()
     return screen, clock
 
-def desenhar_frase(screen, fonte, texto):
-    max_width = screen.get_width() * 0.8
-    words = texto.split(' ')
-    lines = []
-    line = ''
-    for word in words:
-        test = f"{line} {word}" if line else word
-        if fonte.size(test)[0] <= max_width:
-            line = test
-        else:
-            lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
-    # calcula posição inicial para centralizar verticalmente
-    line_height = fonte.get_linesize()
-    total_height = line_height * len(lines)
-    y_start = screen.get_height() * 0.20 - total_height / 2
-    for i, l in enumerate(lines):
-        surf = fonte.render(l, True, PRETO)
-        rect = surf.get_rect(center=(screen.get_width()//2, y_start + i * line_height))
-        screen.blit(surf, rect)
 
 def desenhar_rosto(screen, fonte, estado, tempo):
     x_off = math.cos(tempo*2) * 10
@@ -62,77 +41,12 @@ def atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando):
         return 0, tempo, False
     return None
 
-def criar_botoes(screen_width, screen_height, rotulos):
-    margem, espaco = screen_width * 0.05, screen_width * 0.02
-    altura_botao = screen_height * 0.18
-    largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
-    y = screen_height * 0.8
-    x0 = (screen_width - (len(rotulos)*largura_botao + (len(rotulos)-1)*espaco)) / 2
-    botoes = []
-    for i, rtl in enumerate(rotulos):
-        botao = pygame.Rect(x0 + i * (largura_botao + espaco), y, largura_botao, altura_botao)
-        botoes.append((botao, rtl))
-    return botoes
-
-def desenhar_botoes(screen, botoes, fonte_botao, indice_selecionado):
-    for i, (botao, rotulo) in enumerate(botoes):
-        cor = SELECIONADO if i == indice_selecionado else CINZA
-        pygame.draw.rect(screen, cor, botao, border_radius=12)
-        texto = fonte_botao.render(rotulo, True, BRANCO)
-        texto_rect = texto.get_rect(center=botao.center)
-        screen.blit(texto, texto_rect)
-
-def desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado,
-                        animation_start, fade_duration, delay_between):
-    now = pygame.time.get_ticks()
-    for i, (botao, rotulo) in enumerate(botoes):
-        t_i = now - (animation_start + i * delay_between)
-        if t_i <= 0:
-            alpha = 0
-        elif t_i >= fade_duration:
-            alpha = 255
-        else:
-            alpha = int(255 * (t_i / fade_duration))
-
-        surf = pygame.Surface((botao.width, botao.height), pygame.SRCALPHA)
-        cor = SELECIONADO if i == indice_selecionado else CINZA
-        surf.fill((*cor, alpha))
-
-        txt = fonte_botao.render(rotulo, True, BRANCO)
-        txt.set_alpha(alpha)
-        txt_rect = txt.get_rect(center=(botao.width // 2, botao.height // 2))
-        surf.blit(txt, txt_rect)
-
-        screen.blit(surf, (botao.x, botao.y))
-
-def manipular_entrada(evento, botoes, indice_selecionado):
-    running = True
-    msg = None
-    selected_idx = indice_selecionado
-    if evento.type == pygame.MOUSEBUTTONDOWN:
-        for i, (botao, rotulo) in enumerate(botoes):
-            if botao.collidepoint(evento.pos):
-                selected_idx = i
-                if i == 0:   msg = "Usuário está bem"
-                elif i == 1: msg = "Usuário se sente triste"
-                elif i == 2: running = False
-    elif evento.type == pygame.KEYDOWN:
-        if evento.key == pygame.K_LEFT:
-            selected_idx = (selected_idx - 1) % len(botoes)
-        elif evento.key == pygame.K_RIGHT:
-            selected_idx = (selected_idx + 1) % len(botoes)
-        elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            if selected_idx == 0:   msg = "Usuário está bem"
-            elif selected_idx == 1: msg = "Usuário se sente triste"
-            elif selected_idx == 2: running = False
-    return selected_idx, running, msg
-
 def main():
     screen, clock = inicializar_pygame()
     largura, altura = screen.get_size()
     fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.5), bold=True)
-    fonte_botao = pygame.font.SysFont("Arial", int(altura * 0.05), bold=True)
     fonte_frase = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+    fonte_botao = "Arial"
 
     btn_inicio  = criar_botoes(largura,altura,["Registrar humor","Registrar batimento","Suporte imediato"])
     btn_sentimento  = criar_botoes(largura,altura,["Feliz","Neutro","Triste","Ansioso"])
