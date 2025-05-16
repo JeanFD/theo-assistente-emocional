@@ -26,6 +26,7 @@ class TTS:
 
     def speak(self, text: str):
         def _run():
+            print("falando")
             with self._lock:
                 self.speaking = True
                 self.engine.say(text)

@@ -3,7 +3,7 @@ from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 from interface.rosto import desenhar_rosto, atualizar_estado_rosto
 from sensores.batimentos import ler_batimentos
-from voz.fala import TTS
+from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
 
 FADE_T = 0.3   
@@ -59,6 +59,9 @@ def main():
     falando = False
     tts = TTS(rate=200)                                       
     ultimo_texto = ""
+    falando = False
+    tts = TTS(rate=200)                                       
+    ultimo_texto = ""
 
     fade_start_ms = pygame.time.get_ticks()
     duration_ms   = int(FADE_T * 1000)
@@ -83,7 +86,7 @@ def main():
             text = "Em escala de 1 a 5, quão forte é?"
         elif estado == Estado.OBRIGADO:
             botoes = []
-            text = "Obrigada, aguardarei os próximos registros"
+            text = "Obrigada, aguardarei os próximos registros"       
 
         elif estado == Estado.BATIMENTO:
             bpm = 120 #registro['bpm']
