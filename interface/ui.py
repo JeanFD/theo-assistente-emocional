@@ -31,6 +31,8 @@ def desenhar_frase(screen, fonte, texto):
         screen.blit(surf, rect)
 
 def criar_botoes(screen_width, screen_height, rotulos):
+    if rotulos is None or len(rotulos) == 0:
+        return []
     margem, espaco = screen_width * 0.05, screen_width * 0.02
     altura_botao = screen_height * 0.18
     largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
