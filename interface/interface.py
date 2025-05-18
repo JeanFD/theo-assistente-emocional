@@ -36,7 +36,7 @@ def inicializar_pygame():
 def main():
     screen, clock = inicializar_pygame()
     largura, altura = screen.get_size()
-    fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.5), bold=True)
+    fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
     fonte_frase = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
     fonte_botao = "Arial"
 
