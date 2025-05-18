@@ -1,8 +1,9 @@
-from interface.interface import main as run_interface
+from interface.interface import App
 
 
 def main():
-    run_interface()
+    app = App()
+    app.run()
 
 if __name__ == "__main__":
     main()

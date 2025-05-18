@@ -1,259 +1,183 @@
 import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
-from interface.rosto import desenhar_rosto, atualizar_estado_rosto
+from interface.rosto import Face
 from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
 
 FADE_T = 0.3   
 DELAY_BTWN = 0.2
-
+DURACAO_OBRIGADO = 5.0
 BRANCO = (255, 255, 255)
 
 class Estado(Enum):
     INICIO = auto()
-
     SELECIONAR_SENTIMENTO = auto()
     TIPO_SENTIMENTO = auto()
     ESCALA = auto()
     OBRIGADO = auto() 
-
     BATIMENTO = auto()
     BATIMENTO_FINALIZADO = auto()
-
     AJUDA_IMEDIATA = auto()
     RESPIRACAO = auto()
     GROUNDING = auto()
 
-def inicializar_pygame():
-    pygame.init()
-    info = pygame.display.Info()
-    screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
-    clock = pygame.time.Clock()
-    return screen, clock
+STATE_CONFIG = {
+    Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
+    Estado.SELECIONAR_SENTIMENTO: ("Como você se sente?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
+    Estado.TIPO_SENTIMENTO: ("Ligado a algo bom ou ruim?", ["Bom", "Ruim", "Não sei"]),
+    Estado.ESCALA: ("Em escala de 1 a 5, quão forte é?", [str(i) for i in range(1, 6)]),
+    Estado.OBRIGADO: ("Obrigado, aguardarei os próximos registros", []),
+    Estado.BATIMENTO: ("Seu batimento: {} bpm", ["OK"]),
+    Estado.AJUDA_IMEDIATA: ("Você está passando por um momento difícil, Estou aqui com você. Vamos tentar algumas coisas para te acalmar, tudo bem?", ["Respiração", "Grounding", "Voltar"]),
+    Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
+    Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
+}
 
-def main():
-    screen, clock = inicializar_pygame()
-    largura, altura = screen.get_size()
-    fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
-    fonte_frase = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
-    fonte_botao = "Arial"
+class App:
+    def __init__(self):
+        pygame.init()
+        info = pygame.display.Info()
+        self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+        self.clock = pygame.time.Clock()
 
-    btn_inicio  = criar_botoes(largura,altura,["Registrar humor","Registrar batimento","Suporte imediato"])
-    btn_sentimento  = criar_botoes(largura,altura,["Feliz","Neutro","Triste","Ansioso"])
-    btn_tipo    = criar_botoes(largura,altura,["Bom","Ruim","Não sei"])
-    btn_ajuda        = criar_botoes(largura, altura, ["Respiração","Grounding","Voltar"])
-    btn_respiro_opts = criar_botoes(largura, altura, ["Estou melhor","Continuo ansioso"])
-    btn_ground_opts  = criar_botoes(largura, altura, ["Próxima pergunta","Voltar"])
-    btn_escala     = criar_botoes(largura, altura, [str(i) for i in range(1,6)])
+        largura, altura = self.screen.get_size()
+        self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
+        self.fonte_texto = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+        self.fonte_botao = "Arial"
 
-    estado = Estado.INICIO
-    indice_selecionado = 0
-    registro = {"sentimento":None, "tipo":None, "escala":None}
+        self.face = Face(self.fonte_rosto, self.screen)
 
-    tempo = 0.0
-    indice_rosto = 0
-    ultimo_tempo_troca = 0
-    piscando = False
-    falando = False
-    tts = TTS(rate=200)                                       
-    ultimo_texto = ""
-    falando = False
-    tts = TTS(rate=200)                                       
-    ultimo_texto = ""
+        self.buttons_cache = {st: criar_botoes(largura, altura, labels) for st, (_, labels) in STATE_CONFIG.items()}
 
-    fade_start_ms = pygame.time.get_ticks()
-    duration_ms   = int(FADE_T * 1000)
-    delay_ms      = int(DELAY_BTWN * 1000)
-    DURACAO_OBRIGADO = 5.0
+        self.estado = Estado.INICIO
+        self.indice_selecionado = 0
+        self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
 
-    running = True
-    while running:
-        dt = clock.tick(60) / 1000.0
-        tempo += dt
-        if estado == Estado.INICIO:
-            botoes = btn_inicio
-            text = "O que deseja fazer?"
-        elif estado == Estado.SELECIONAR_SENTIMENTO:
-            botoes = btn_sentimento
-            text = "Como você se sente?"
-        elif estado == Estado.TIPO_SENTIMENTO:
-            botoes = btn_tipo
-            text = "Ligado a algo bom ou ruim?"
-        elif estado == Estado.ESCALA:
-            botoes = btn_escala
-            text = "Em escala de 1 a 5, quão forte é?"
-        elif estado == Estado.OBRIGADO:
-            botoes = []
-            text = "Obrigada, aguardarei os próximos registros"       
+        self.tempo = 0.0
+        self.tempo_obrigado = 0
+        self.falando = False
 
-        elif estado == Estado.BATIMENTO:
-            bpm = 120 #registro['bpm']
-            texto = f"Seu batimento: {bpm} bpm"
-            # avalia normal/anormal
-            normal = 73 <= bpm <= 78
-            #((registro['sexo']=="Mulher" and 73 <= bpm <= 78)
-                    # or (registro['sexo']=="Homem"  and 70 <= bpm <= 76))
-            text = texto + ("\nEstá normal." if normal else "\nEstá anormal, fique atento.")
-            botoes = criar_botoes(largura, altura, ["OK"])
+        self.tts = TTS(rate=200)                                       
+        self.ultimo_texto = ""
+    
+        self.fade_start_ms = pygame.time.get_ticks()
+    
+    def run(self):
+        while True:
+            dt = self.clock.tick(60) / 1000.0
+            self.tempo += dt
+            self.handle_events()
+            self.update_tempo_obrigado()
+            self.render()
 
-        elif estado == Estado.AJUDA_IMEDIATA:
-            botoes, text = btn_ajuda, (
-                "Você está passando por um momento difícil. Estou aqui com você.\n"
-                "Vamos tentar algumas coisas para te acalmar, tudo bem?"
-            )
-        elif estado == Estado.RESPIRACAO:
-            botoes, text = btn_respiro_opts, (
-                "Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\n"
-                "Repita algumas vezes."
-            )
-        
-        elif estado == Estado.GROUNDING:
-            botoes, text = btn_ground_opts, "Diga 3 coisas que você vê agora."
-
+    def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
-                running = False
+                pygame.quit(), sys.exit()
 
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
-                    running = False
+                    pygame.quit(), sys.exit()
                 
-                elif estado in (Estado.INICIO, Estado.SELECIONAR_SENTIMENTO, Estado.TIPO_SENTIMENTO, Estado.ESCALA):
+                if self.estado in STATE_CONFIG:
+                    n = len(self.buttons_cache[self.estado])
                     if evento.key == pygame.K_LEFT:
-                        indice_selecionado = (indice_selecionado - 1) % len(botoes)
+                        self.indice_selecionado = (self.indice_selecionado - 1) % n
                     elif evento.key == pygame.K_RIGHT:
-                        indice_selecionado = (indice_selecionado + 1) % len(botoes)
+                        self.indice_selecionado = (self.indice_selecionado + 1) % n
                     elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        clicked = indice_selecionado
-
-                elif estado == Estado.OBRIGADO:
-                    if evento.key == pygame.K_RETURN:
-                        clicked = -1
+                        clicked = self.indice_selecionado
+                
+                if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        clicked = -1 
 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
-                if estado in (Estado):
-                    for i, (botao, _) in enumerate(botoes):
-                        if botao.collidepoint(evento.pos):
-                            clicked = i
-                            break
-                elif estado == Estado.OBRIGADO:
-                    clicked = -1
+                for i, (btn, _) in enumerate(self.buttons_cache.get(self.estado,[])):
+                    if btn.collidepoint(evento.pos):
+                        clicked = i
+                        break
 
         if clicked is not None:
-            if estado == Estado.INICIO:
-                if clicked == 0:
-                    estado = Estado.SELECIONAR_SENTIMENTO
-                    indice_selecionado = 0
-                elif clicked == 1:
-                    estado = Estado.BATIMENTO
-                    indice_selecionado = -1
-                elif clicked == 2:
-                    estado = Estado.AJUDA_IMEDIATA
-                    indice_selecionado = 0
-                indice_selecionado = 0
+            self.on_click(clicked)
 
-            elif estado == Estado.SELECIONAR_SENTIMENTO:
-                registro['sentimento'] = botoes[clicked][1]
-                if clicked == 0:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
-                elif clicked == 1:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
-                elif clicked == 2:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
-                elif clicked == 3:
-                    estado = Estado.TIPO_SENTIMENTO
-                    indice_selecionado = 0
+    def on_click(self, clicked):
+        self.fade_start_ms = pygame.time.get_ticks()
 
-            elif estado == Estado.TIPO_SENTIMENTO:
-                registro['tipo'] = botoes[clicked][1]
-                if clicked == 0:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
-                elif clicked == 1:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
-                elif clicked == 2:
-                    estado = Estado.ESCALA
-                    indice_selecionado = 0
+        if self.estado == Estado.INICIO:
+            if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
+            elif clicked == 1: self.estado = Estado.BATIMENTO
+            elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
+            self.indice_selecionado = 0
 
-            elif estado == Estado.ESCALA:
-                registro['escala'] = botoes[clicked][1]
-                estado = Estado.OBRIGADO
-                print(registro)
-                enviar_servidor(registro)
-                indice_selecionado = 0    
-                inicio_obrigado = tempo
-                
-            elif estado == Estado.BATIMENTO:
-                print("aqui")
-                registro['bpm'] = ler_batimentos()
-                if clicked == 0:
-                    estado = Estado.INICIO
-                    indice_selecionado = 0
+        elif self.estado == Estado.SELECIONAR_SENTIMENTO:
+            self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
+            self.estado = Estado.TIPO_SENTIMENTO if clicked == 3 else Estado.ESCALA
+            self.indice_selecionado = 0
 
-            elif estado == Estado.INICIO and clicked == 2:
-                estado = Estado.AJUDA_IMEDIATA
+        elif self.estado == Estado.TIPO_SENTIMENTO:
+            self.registro['tipo'] = STATE_CONFIG[self.estado][1][clicked]
+            self.estado = Estado.ESCALA
+            self.indice_selecionado = 0
 
-            elif estado == Estado.AJUDA_IMEDIATA:
-                if clicked == 0:
-                    estado = Estado.RESPIRACAO
-                elif clicked == 1:
-                    estado = Estado.GROUNDING
-                else:  # “Voltar”
-                    estado = Estado.INICIO
+        elif self.estado == Estado.ESCALA:
+            self.registro['escala'] = STATE_CONFIG[self.estado][1][clicked]
+            print(self.registro)
+            enviar_servidor(self.registro)
+            self.estado = Estado.OBRIGADO
+            self.tempo_obrigado = self.tempo
+            self.indice_selecionado = 0
 
-            elif estado == Estado.RESPIRACAO:
-                # trate respostas “Estou melhor” ou “Continuo ansioso”
-                if clicked == 0:
-                    text = "Ótimo, fico feliz em ajudar."
-                else:
-                    text = "Tudo bem, continue respirando devagar."
-                botoes = criar_botoes(largura, altura, ["Voltar"])
-                estado = Estado.AJUDA_IMEDIATA
+        elif self.estado == Estado.OBRIGADO:
+            self.estado = Estado.INICIO
+            self.indice_selecionado = 0
 
-            elif estado == Estado.GROUNDING:
-                # implemente “Próxima pergunta” ou “Voltar”
-                if clicked == 0:
-                    text = "Descreva um objeto perto de você em detalhes."
-                    botoes = criar_botoes(largura, altura, ["Voltar"])
-                    estado = Estado.AJUDA_IMEDIATA
-                else:
-                    estado = Estado.AJUDA_IMEDIATA
+        elif self.estado == Estado.BATIMENTO:
+            self.registro['bpm'] = ler_batimentos()
+            self.estado = Estado.BATIMENTO_FINALIZADO
+            self.indice_selecionado = 0
 
-            
-            fade_start_ms = pygame.time.get_ticks()
-            
-        if estado == Estado.OBRIGADO:
-            if tempo - inicio_obrigado >= DURACAO_OBRIGADO or clicked == -1:
-                estado = Estado.INICIO
-            indice_selecionado = 0  
+        elif self.estado == Estado.BATIMENTO_FINALIZADO:
+            self.estado = Estado.OBRIGADO
+            self.tempo_obrigado = self.tempo
+            self.indice_selecionado = 0
 
-            fade_start_ms = pygame.time.get_ticks()
+        elif self.estado == Estado.AJUDA_IMEDIATA:
+            if clicked == 0: self.estado = Estado.RESPIRACAO
+            elif clicked == 1: self.estado = Estado.GROUNDING
+            elif clicked == 2: self.estado = Estado.INICIO
+            self.indice_selecionado = 0
 
-        screen.fill(BRANCO)      
-        desenhar_frase(screen, fonte_frase, text)
+        elif self.estado == (Estado.RESPIRACAO, Estado.GROUNDING):
+            self.estado = Estado.AJUDA_IMEDIATA
+            self.indice_selecionado = 0
 
-        resultado = atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando, falando)
-        if resultado:
-            indice_rosto, ultimo_tempo_troca, piscando = resultado
+    def update_tempo_obrigado(self):
+        if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
+                 if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
+                      self.estado = Estado.INICIO
+                      self.indice_selecionado = 0
+                      self.tempo_obrigado = None
 
-        desenhar_rosto(screen, fonte_rosto, indice_rosto, tempo)
+    def render(self):
+        self.screen.fill(BRANCO)
 
-        if text != ultimo_texto:
-            tts.speak(text)
-            ultimo_texto = text
-        falando = tts.speaking
+        text, _ = STATE_CONFIG.get(self.estado, ("", []))
+        desenhar_frase(self.screen, self.fonte_texto, text)
 
+        self.face.update(self.tempo, self.falando)
+        self.face.desenhar(self.tempo)
+        
+        if text != self.ultimo_texto:
+            self.tts.speak(text)
+            self.falando = True
+            self.ultimo_texto = text
+        elif self.falando and not self.tts.speaking:
+            self.falando = False
+
+        botoes = self.buttons_cache.get(self.estado, [])
         if botoes:
-            desenhar_botoes_fade(screen, botoes, fonte_botao, indice_selecionado, fade_start_ms, duration_ms, delay_ms)
-
+            desenhar_botoes_fade(self.screen, botoes, self.fonte_botao, self.indice_selecionado, self.fade_start_ms, FADE_T * 1000, DELAY_BTWN * 1000)
         pygame.display.flip()
-
-    pygame.quit()
-    sys.exit()
