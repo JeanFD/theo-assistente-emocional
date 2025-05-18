@@ -1,13 +1,11 @@
-import pygame, sys, math
+import pygame, sys
 from enum import Enum, auto
-from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
-from interface.rosto import Face
+from interface.ui import *
+from interface.rosto import Rosto
 from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
 
-FADE_T = 0.3   
-DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
 BRANCO = (255, 255, 255)
 
@@ -42,14 +40,16 @@ class App:
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
 
-        largura, altura = self.screen.get_size()
-        self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
-        self.fonte_texto = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+        self.largura, self.altura = self.screen.get_size()
+        self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(self.altura * 0.8), bold=True)
+        self.fonte_texto = pygame.font.SysFont("Arial", int(self.altura*0.1), bold=True)
         self.fonte_botao = "Arial"
 
-        self.face = Face(self.fonte_rosto, self.screen)
+        self.texto = TextRenderer(self.screen, self.fonte_texto)
+        init_labels = STATE_CONFIG[Estado.INICIO][1]
+        self.btn_group = GrupoBotoes(self.largura, self.altura, init_labels, self.fonte_botao)
 
-        self.buttons_cache = {st: criar_botoes(largura, altura, labels) for st, (_, labels) in STATE_CONFIG.items()}
+        self.rosto = Rosto(self.fonte_rosto, self.screen)
 
         self.estado = Estado.INICIO
         self.indice_selecionado = 0
@@ -74,6 +74,7 @@ class App:
 
     def handle_events(self):
         clicked = None
+        labels = STATE_CONFIG[self.estado][1]
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit(), sys.exit()
@@ -81,22 +82,22 @@ class App:
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     pygame.quit(), sys.exit()
+                if labels:
+                    if self.estado in STATE_CONFIG:
+                        n = len(STATE_CONFIG[self.estado][1])
+                        if evento.key == pygame.K_LEFT:
+                            self.indice_selecionado = (self.indice_selecionado - 1) % n
+                        elif evento.key == pygame.K_RIGHT:
+                            self.indice_selecionado = (self.indice_selecionado + 1) % n
+                        elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                            clicked = self.indice_selecionado
                 
-                if self.estado in STATE_CONFIG:
-                    n = len(self.buttons_cache[self.estado])
-                    if evento.key == pygame.K_LEFT:
-                        self.indice_selecionado = (self.indice_selecionado - 1) % n
-                    elif evento.key == pygame.K_RIGHT:
-                        self.indice_selecionado = (self.indice_selecionado + 1) % n
-                    elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        clicked = self.indice_selecionado
-                
-                if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        clicked = -1 
+                elif self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    clicked = -1
 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
-                for i, (btn, _) in enumerate(self.buttons_cache.get(self.estado,[])):
-                    if btn.collidepoint(evento.pos):
+                for i, btn in enumerate(self.btn_group.buttons):
+                    if btn.rect.collidepoint(evento.pos):
                         clicked = i
                         break
 
@@ -104,23 +105,20 @@ class App:
             self.on_click(clicked)
 
     def on_click(self, clicked):
-        self.fade_start_ms = pygame.time.get_ticks()
+        self.indice_selecionado = 0
 
         if self.estado == Estado.INICIO:
             if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
             elif clicked == 1: self.estado = Estado.BATIMENTO
             elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
             self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
             self.estado = Estado.TIPO_SENTIMENTO if clicked == 3 else Estado.ESCALA
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.TIPO_SENTIMENTO:
             self.registro['tipo'] = STATE_CONFIG[self.estado][1][clicked]
             self.estado = Estado.ESCALA
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.ESCALA:
             self.registro['escala'] = STATE_CONFIG[self.estado][1][clicked]
@@ -128,47 +126,54 @@ class App:
             enviar_servidor(self.registro)
             self.estado = Estado.OBRIGADO
             self.tempo_obrigado = self.tempo
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.OBRIGADO:
             self.estado = Estado.INICIO
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.BATIMENTO:
             self.registro['bpm'] = ler_batimentos()
             self.estado = Estado.BATIMENTO_FINALIZADO
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.BATIMENTO_FINALIZADO:
             self.estado = Estado.OBRIGADO
             self.tempo_obrigado = self.tempo
-            self.indice_selecionado = 0
 
         elif self.estado == Estado.AJUDA_IMEDIATA:
             if clicked == 0: self.estado = Estado.RESPIRACAO
             elif clicked == 1: self.estado = Estado.GROUNDING
             elif clicked == 2: self.estado = Estado.INICIO
-            self.indice_selecionado = 0
 
         elif self.estado == (Estado.RESPIRACAO, Estado.GROUNDING):
             self.estado = Estado.AJUDA_IMEDIATA
-            self.indice_selecionado = 0
+
+        new_labels = STATE_CONFIG[self.estado][1]
+        if new_labels:
+            self.btn_group = GrupoBotoes(self.largura, self.altura, new_labels, self.fonte_botao)
+        else:
+            self.btn_group.buttons.clear()
 
     def update_tempo_obrigado(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
-                 if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
-                      self.estado = Estado.INICIO
-                      self.indice_selecionado = 0
-                      self.tempo_obrigado = None
+                if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
+                    self.estado = Estado.INICIO
+                    self.tempo_obrigado = None
+
+                    initial_labels = STATE_CONFIG[self.estado][1]
+                    if initial_labels:
+                        self.btn_group = GrupoBotoes(
+                            self.largura, self.altura,
+                            initial_labels, self.fonte_botao
+                        )
+    
 
     def render(self):
         self.screen.fill(BRANCO)
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
-        desenhar_frase(self.screen, self.fonte_texto, text)
+        self.texto.desenhar(text)
 
-        self.face.update(self.tempo, self.falando)
-        self.face.desenhar(self.tempo)
+        self.rosto.update(self.tempo, self.falando)
+        self.rosto.desenhar(self.tempo)
         
         if text != self.ultimo_texto:
             self.tts.speak(text)
@@ -177,7 +182,5 @@ class App:
         elif self.falando and not self.tts.speaking:
             self.falando = False
 
-        botoes = self.buttons_cache.get(self.estado, [])
-        if botoes:
-            desenhar_botoes_fade(self.screen, botoes, self.fonte_botao, self.indice_selecionado, self.fade_start_ms, FADE_T * 1000, DELAY_BTWN * 1000)
+        self.btn_group.desenhar(self.screen, self.indice_selecionado)
         pygame.display.flip()

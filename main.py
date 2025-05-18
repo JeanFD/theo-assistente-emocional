@@ -1,5 +1,4 @@
-from interface.interface import App
-
+from app import App
 
 def main():
     app = App()
