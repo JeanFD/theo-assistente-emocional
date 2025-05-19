@@ -2,6 +2,7 @@ import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 from interface.rosto import Face
+from interface.transicao import Transicao
 from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
@@ -10,6 +11,7 @@ FADE_T = 0.3
 DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
 BRANCO = (255, 255, 255)
+PRETO = (0, 0, 0)
 
 class Estado(Enum):
     INICIO = auto()
@@ -22,6 +24,7 @@ class Estado(Enum):
     AJUDA_IMEDIATA = auto()
     RESPIRACAO = auto()
     GROUNDING = auto()
+    DORMINDO = auto()
 
 STATE_CONFIG = {
     Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
@@ -30,9 +33,11 @@ STATE_CONFIG = {
     Estado.ESCALA: ("Em escala de 1 a 5, quão forte é?", [str(i) for i in range(1, 6)]),
     Estado.OBRIGADO: ("Obrigado, aguardarei os próximos registros", []),
     Estado.BATIMENTO: ("Seu batimento: {} bpm", ["OK"]),
+    Estado.BATIMENTO_FINALIZADO: (""),
     Estado.AJUDA_IMEDIATA: ("Você está passando por um momento difícil, Estou aqui com você. Vamos tentar algumas coisas para te acalmar, tudo bem?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
+    Estado.DORMINDO: ("", [])
 }
 
 class App:
@@ -41,6 +46,8 @@ class App:
         info = pygame.display.Info()
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
+
+        pygame.mouse.set_visible(False)
 
         largura, altura = self.screen.get_size()
         self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
@@ -51,7 +58,7 @@ class App:
 
         self.buttons_cache = {st: criar_botoes(largura, altura, labels) for st, (_, labels) in STATE_CONFIG.items()}
 
-        self.estado = Estado.INICIO
+        self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
         self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
 
@@ -61,6 +68,14 @@ class App:
 
         self.tts = TTS(rate=200)                                       
         self.ultimo_texto = ""
+
+        self.ultimo_evento = pygame.time.get_ticks() / 1000
+        self.segundos_dormir = 5
+
+        self.fade_fundo = Transicao(tempo_fade=1.0)
+        self.fade_rosto = Transicao(tempo_fade=1.0)
+        self.cor_fundo_atual = PRETO
+        self.cor_rosto_atual = BRANCO
     
         self.fade_start_ms = pygame.time.get_ticks()
     
@@ -69,12 +84,16 @@ class App:
             dt = self.clock.tick(60) / 1000.0
             self.tempo += dt
             self.handle_events()
-            self.update_tempo_obrigado()
+            self.update_tempo()
             self.render()
 
     def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
+            if self.estado == Estado.DORMINDO and evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                self.estado = Estado.INICIO
+                self.ultimo_evento = self.tempo
+                return 
             if evento.type == pygame.QUIT:
                 pygame.quit(), sys.exit()
 
@@ -154,21 +173,40 @@ class App:
             self.estado = Estado.AJUDA_IMEDIATA
             self.indice_selecionado = 0
 
-    def update_tempo_obrigado(self):
+        elif self.estado == Estado.DORMINDO:
+            self.estado = Estado.INICIO
+
+    def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
                  if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
                       self.estado = Estado.INICIO
                       self.indice_selecionado = 0
                       self.tempo_obrigado = None
+        if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
+            self.estado = Estado.DORMINDO
 
     def render(self):
-        self.screen.fill(BRANCO)
+        if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
+            self.fade_fundo.start(self.cor_fundo_atual, (0,0,0))
+            self.fade_rosto.start(self.cor_rosto_atual, (255,255,255))
+        elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0,0,0):
+            self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
+            self.fade_rosto.start(self.cor_rosto_atual, (0,0,0))
+
+        # Atualiza as cores suavemente
+        nova_cor_fundo, _ = self.fade_fundo.update()
+        nova_cor_rosto, _ = self.fade_rosto.update()
+        self.cor_fundo_atual = nova_cor_fundo
+        self.cor_rosto_atual = nova_cor_rosto
+        self.screen.fill(self.cor_fundo_atual)
+
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
         desenhar_frase(self.screen, self.fonte_texto, text)
 
-        self.face.update(self.tempo, self.falando)
+        self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
         self.face.desenhar(self.tempo)
+
         
         if text != self.ultimo_texto:
             self.tts.speak(text)
