@@ -2,7 +2,7 @@ import math
 
 ROSTO_BASE = ["O -- O", "-- -- --", "O o O", "-- o --", "^ -- ^"]
 
-class Rosto:
+class Face:
     def __init__(self, fonte, screen, velocidade_fala=6):
         self.fonte = fonte
         self.screen = screen
