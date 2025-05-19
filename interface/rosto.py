@@ -1,33 +1,49 @@
 import math
 
-PRETO = (0, 0, 0)
-ROSTO_BASE = ["O -- O", "-- -- --", "O o O", "-- o --"]
+ROSTO_BASE = ["O -- O", "-- -- --", "O o O", "-- o --", "^ -- ^"]
 
-def desenhar_rosto(screen, fonte, rosto, tempo):
-    x_off = math.cos(tempo*2) * 10
-    y_off = math.sin(tempo*2) * 20
-    surf = fonte.render(rosto, True, PRETO)
-    screen.blit(surf, surf.get_rect(center=((screen.get_width()//2)+x_off, (screen.get_height()//2)+y_off)))
+class Face:
+    def __init__(self, fonte, screen, velocidade_fala=6):
+        self.fonte = fonte
+        self.screen = screen
+        self.velocidade_fala = velocidade_fala
 
-def atualizar_estado_rosto(tempo, ultimo_tempo_troca, piscando, falando, velocidade_fala=6):
-    if piscando:
-        estado = 1
-    else:
-        estado = 0
+        self.dormindo = False
 
-    if not piscando and (tempo - ultimo_tempo_troca >= 2.4):
-        estado = 1
-        piscando = True
-        ultimo_tempo_troca = tempo
-    elif piscando and (tempo - ultimo_tempo_troca >= 0.2):
-        estado = 0
-        piscando = False 
-        ultimo_tempo_troca = tempo
-    
-    if falando:
-        falando = (int(tempo * velocidade_fala) % 2) == 0
+        self.ultimo_tempo_troca = 0.0
+        self.piscando = False
+        self.rosto_atual = ROSTO_BASE[0]
+        self.cor = (0,0,0)
 
-    if falando:
-        estado += 2
-    
-    return ROSTO_BASE[estado], ultimo_tempo_troca, piscando
+    def update(self, tempo: float, falando: bool, dormindo: bool, cor=(50,50,50)):
+        self.dormindo = dormindo
+        self.cor = cor
+        if dormindo:
+            self.rosto_atual = ROSTO_BASE[4]
+            return
+
+        if not self.piscando and tempo - self.ultimo_tempo_troca >= 2.4:
+            self.piscando = True
+            self.ultimo_tempo_troca = tempo
+        elif self.piscando and tempo - self.ultimo_tempo_troca >= 0.2:
+            self.piscando = False
+            self.ultimo_tempo_troca = tempo
+
+        estado = 1 if self.piscando else 0
+
+        
+        if falando and ((int(tempo * self.velocidade_fala) % 2) == 0):
+            estado += 2
+
+        self.rosto_atual = ROSTO_BASE[estado]
+
+
+    def desenhar(self, tempo: float):
+        x_off = math.cos(tempo * 2) * 10
+        y_off = math.sin(tempo * 2) * 20
+
+        surf = self.fonte.render(self.rosto_atual, True, self.cor)
+        rect = surf.get_rect(
+            center=(self.screen.get_width()//2 + x_off, self.screen.get_height()//2 + y_off)
+        )
+        self.screen.blit(surf, rect)
