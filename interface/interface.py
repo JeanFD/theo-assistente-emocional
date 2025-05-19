@@ -10,6 +10,7 @@ FADE_T = 0.3
 DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
 BRANCO = (255, 255, 255)
+PRETO = (0, 0, 0)
 
 class Estado(Enum):
     INICIO = auto()
@@ -22,6 +23,7 @@ class Estado(Enum):
     AJUDA_IMEDIATA = auto()
     RESPIRACAO = auto()
     GROUNDING = auto()
+    DORMINDO = auto()
 
 STATE_CONFIG = {
     Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
@@ -33,6 +35,7 @@ STATE_CONFIG = {
     Estado.AJUDA_IMEDIATA: ("Você está passando por um momento difícil, Estou aqui com você. Vamos tentar algumas coisas para te acalmar, tudo bem?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
+    Estado.DORMINDO: ("", [])
 }
 
 class App:
@@ -51,7 +54,7 @@ class App:
 
         self.buttons_cache = {st: criar_botoes(largura, altura, labels) for st, (_, labels) in STATE_CONFIG.items()}
 
-        self.estado = Estado.INICIO
+        self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
         self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
 
@@ -61,6 +64,9 @@ class App:
 
         self.tts = TTS(rate=200)                                       
         self.ultimo_texto = ""
+
+        self.ultimo_evento = pygame.time.get_ticks() / 1000
+        self.segundos_dormir = 30
     
         self.fade_start_ms = pygame.time.get_ticks()
     
@@ -69,12 +75,14 @@ class App:
             dt = self.clock.tick(60) / 1000.0
             self.tempo += dt
             self.handle_events()
-            self.update_tempo_obrigado()
+            self.update_tempo()
             self.render()
 
     def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
+            if evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                self.ultimo_evento = self.tempo
             if evento.type == pygame.QUIT:
                 pygame.quit(), sys.exit()
 
@@ -154,20 +162,29 @@ class App:
             self.estado = Estado.AJUDA_IMEDIATA
             self.indice_selecionado = 0
 
-    def update_tempo_obrigado(self):
+        elif self.estado == Estado.DORMINDO:
+            self.estado = Estado.INICIO
+
+    def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
                  if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
                       self.estado = Estado.INICIO
                       self.indice_selecionado = 0
                       self.tempo_obrigado = None
+        if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
+            self.estado = Estado.DORMINDO
 
     def render(self):
-        self.screen.fill(BRANCO)
+        modo_dormindo = self.estado == Estado.DORMINDO
+        cor_fundo = PRETO if modo_dormindo else BRANCO
+        cor_rosto = BRANCO if modo_dormindo else PRETO
+
+        self.screen.fill(cor_fundo)
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
         desenhar_frase(self.screen, self.fonte_texto, text)
-
-        self.face.update(self.tempo, self.falando)
+        print(cor_rosto)
+        self.face.update(self.tempo, self.falando, dormindo = modo_dormindo, cor=cor_rosto)
         self.face.desenhar(self.tempo)
         
         if text != self.ultimo_texto:
