@@ -1,4 +1,4 @@
-from interface.interface import main as run_interface
+from App import main as run_interface
 
 
 def main():
