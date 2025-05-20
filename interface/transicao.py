@@ -10,17 +10,17 @@ class Transicao:
         self.para = (0, 0, 0)
         self.fracao = 0.0
 
-    def start(self, cor_atual, cor_destino):
+    def start(self, cor_atual, cor_destino, tempo_atual):
         self.transicionando = True
-        self.t0 = time.time()
+        self.t0 = tempo_atual
         self.de = cor_atual
         self.para = cor_destino
         self.fracao = 0.0
 
-    def update(self):
+    def update(self, tempo_atual):
         if not self.transicionando:
             return self.para, False
-        dt = time.time() - self.t0
+        dt = tempo_atual - self.t0
         frac = min(dt / self.tempo_fade, 1.0)
         cor = tuple(
             int(self.de[i] + (self.para[i] - self.de[i]) * frac)

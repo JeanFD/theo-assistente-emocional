@@ -86,9 +86,11 @@ def criar_botoes(screen_width, screen_height, rotulos):
     return botoes
 
 class GrupoBotoes:
-    def __init__(self, screen_width, screen_height, labels, font_name,
-                 base_color=CINZA, select_color=SELECIONADO,
-                 fade_duration=FADE_T*1000, fade_delay=DELAY_BTWN*1000):
+    def __init__(self, screen_width, screen_height, labels, font_name, base_color=CINZA, select_color=SELECIONADO, fade_duration=FADE_T*1000, fade_delay=DELAY_BTWN*1000):
+        if not labels:
+            self.buttons = []
+            return
+        
         margem, espaco = screen_width*0.05, screen_width*0.02
         btn_h = screen_height*0.18
         btn_w = (screen_width - 2*margem - (len(labels)-1)*espaco)/len(labels)

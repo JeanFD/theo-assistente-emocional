@@ -88,11 +88,12 @@ class App:
     def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
-            # Dormindo: acorda com qualquer clique ou tecla
+            
             if self.estado == Estado.DORMINDO and evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 self.estado = Estado.INICIO
                 self.ultimo_evento = self.tempo
                 self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
+                self.ultimo_texto = ""
                 return
 
             if evento.type == pygame.QUIT:
@@ -175,14 +176,14 @@ class App:
 
     def render(self):
         if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
-            self.fade_fundo.start(self.cor_fundo_atual, (0,0,0))
-            self.fade_rosto.start(self.cor_rosto_atual, (255,255,255))
+            self.fade_fundo.start(self.cor_fundo_atual, PRETO, self.tempo)
+            self.fade_rosto.start(self.cor_rosto_atual, BRANCO, self.tempo)
         elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0,0,0):
-            self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
-            self.fade_rosto.start(self.cor_rosto_atual, (0,0,0))
+            self.fade_fundo.start(self.cor_fundo_atual, BRANCO, self.tempo)
+            self.fade_rosto.start(self.cor_rosto_atual, PRETO, self.tempo)
 
-        nova_cor_fundo, _ = self.fade_fundo.update()
-        nova_cor_rosto, _ = self.fade_rosto.update()
+        nova_cor_fundo, _ = self.fade_fundo.update(self.tempo)
+        nova_cor_rosto, _ = self.fade_rosto.update(self.tempo)
         self.cor_fundo_atual = nova_cor_fundo
         self.cor_rosto_atual = nova_cor_rosto
         self.screen.fill(self.cor_fundo_atual)
