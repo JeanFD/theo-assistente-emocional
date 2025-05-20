@@ -26,8 +26,21 @@ class Estado(Enum):
     GROUNDING = auto()
     DORMINDO = auto()
 
+AUDIO_KEYS = {
+    Estado.INICIO: "inicio",
+    Estado.SELECIONAR_SENTIMENTO: "selecionar_sentimento",
+    Estado.TIPO_SENTIMENTO: "tipo_sentimento",
+    Estado.ESCALA: "escala",
+    Estado.OBRIGADO: "obrigado",
+    Estado.BATIMENTO: "batimento",
+    Estado.BATIMENTO_FINALIZADO: "batimento_finalizado",
+    Estado.AJUDA_IMEDIATA: "ajuda_imediata",
+    Estado.RESPIRACAO: "respiracao",
+    Estado.GROUNDING: "grounding",
+}
+
 STATE_CONFIG = {
-    Estado.INICIO: ("Ola! O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
+    Estado.INICIO: ("Olá! O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
     Estado.SELECIONAR_SENTIMENTO: ("Como você está se sentindo agora?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
     Estado.TIPO_SENTIMENTO: ("Esse sentimento é positivo ou negativo?", ["Positivo", "Negativo", "Não sei"]),
     Estado.ESCALA: ("Em uma escala de 1 a 5, qual a intensidade desse sentimento?", [str(i) for i in range(1, 6)]),
@@ -65,7 +78,7 @@ class App:
         self.tempo = 0.0
         self.tempo_obrigado = 0
         self.falando = False
-        self.tts = TTS(rate=200)                                       
+        self.tts = TTS()                                       
         self.ultimo_texto = ""
         self.ultimo_evento = pygame.time.get_ticks() / 1000
         self.segundos_dormir = 30
@@ -196,6 +209,7 @@ class App:
         self.screen.fill(self.cor_fundo_atual)
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
+        key = AUDIO_KEYS.get(self.estado) 
         if self.estado != Estado.DORMINDO:
             self.texto.desenhar(text)
             if self.btn_group.buttons and not self.falando_primeiro:
@@ -205,21 +219,20 @@ class App:
         self.face.desenhar(self.tempo)
 
         if self.falando_primeiro:
-            if not self.falando and text:
-                self.tts.speak(text)
+            if not self.falando and key:
+                self.tts.speak(key)     
                 self.falando = True
-                self.ultimo_texto = text
+                self.ultimo_texto = key 
             elif self.falando and not self.tts.speaking:
                 self.falando = False
                 self.falando_primeiro = False
                 self.btn_group.start_ms = pygame.time.get_ticks()
         else:
-            if text != self.ultimo_texto and self.estado != Estado.DORMINDO:
-                self.tts.speak(text)
+            if key and key != self.ultimo_texto and self.estado != Estado.DORMINDO:
+                self.tts.speak(key)
                 self.falando = True
-                self.ultimo_texto = text
+                self.ultimo_texto = key
             elif self.falando and not self.tts.speaking:
                 self.falando = False
-
         pygame.display.flip()
 
