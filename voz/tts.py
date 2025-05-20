@@ -9,7 +9,7 @@ class TTS:
     """
     def __init__(self, audio_dir="audio", volume=1.0):
         # Inicializa o mixer do pygame
-        pygame.mixer.init()
+       
         # Define caminho absoluto da pasta de áudios (mesmo diretório de tts.py)
         base_dir = os.path.dirname(__file__)
         self.audio_dir = os.path.join(base_dir, audio_dir)
