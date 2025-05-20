@@ -27,14 +27,14 @@ class Estado(Enum):
     DORMINDO = auto()
 
 STATE_CONFIG = {
-    Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
-    Estado.SELECIONAR_SENTIMENTO: ("Como você se sente?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
-    Estado.TIPO_SENTIMENTO: ("Ligado a algo bom ou ruim?", ["Bom", "Ruim", "Não sei"]),
-    Estado.ESCALA: ("Em escala de 1 a 5, quão forte é?", [str(i) for i in range(1, 6)]),
-    Estado.OBRIGADO: ("Obrigado, aguardarei os próximos registros", []),
-    Estado.BATIMENTO: ("Seu batimento: {} bpm", ["OK"]),
+    Estado.INICIO: ("Ola! O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
+    Estado.SELECIONAR_SENTIMENTO: ("Como você está se sentindo agora?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
+    Estado.TIPO_SENTIMENTO: ("Esse sentimento é positivo ou negativo?", ["Bom", "Ruim", "Não sei"]),
+    Estado.ESCALA: ("Em uma escala de 1 a 5, qual a intensidade desse sentimento?", [str(i) for i in range(1, 6)]),
+    Estado.OBRIGADO: ("Ótimo! Seus dados foram registrados com sucesso.", []),
+    Estado.BATIMENTO: ("Seu batimento cardíaco é de {} bpm.", ["OK"]),
     Estado.BATIMENTO_FINALIZADO: ("", []),
-    Estado.AJUDA_IMEDIATA: ("Você está passando por um momento difícil, Estou aqui com você. Vamos tentar algumas coisas para te acalmar, tudo bem?", ["Respiração", "Grounding", "Voltar"]),
+    Estado.AJUDA_IMEDIATA: ("Vejo que você precisa de apoio. Vamos tentar relaxar. O que prefere?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
     Estado.DORMINDO: ("", [])
