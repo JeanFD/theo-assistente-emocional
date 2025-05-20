@@ -70,6 +70,8 @@ class App:
         self.ultimo_evento = pygame.time.get_ticks() / 1000
         self.segundos_dormir = 5
 
+        self.falando_primeiro = False 
+
         self.fade_fundo = Transicao(tempo_fade=1.0)
         self.fade_rosto = Transicao(tempo_fade=1.0)
         self.cor_fundo_atual = PRETO
@@ -94,6 +96,8 @@ class App:
                 self.ultimo_evento = self.tempo
                 self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
                 self.ultimo_texto = ""
+
+                self.falando_primeiro = True
                 return
 
             if evento.type == pygame.QUIT:
@@ -128,6 +132,7 @@ class App:
         self.fade_start_ms = pygame.time.get_ticks()
 
         if self.estado == Estado.INICIO:
+            self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
             if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
             elif clicked == 1: self.estado = Estado.BATIMENTO
             elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
@@ -162,11 +167,13 @@ class App:
         labels = STATE_CONFIG[self.estado][1]
         self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), labels, self.fonte_botao)
         self.indice_selecionado = 0
+        self.falando_primeiro = True  # ADICIONEI
+        self.ultimo_texto = ""
 
     def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
             if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
-                self.estado = Estado.INICIO
+                self.estado = Estado.DORMINDO
                 self.indice_selecionado = 0
                 self.tempo_obrigado = None
                 self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
@@ -191,18 +198,28 @@ class App:
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
         if self.estado != Estado.DORMINDO:
             self.texto.desenhar(text)
-            if self.btn_group.buttons:
+            if self.btn_group.buttons and not self.falando_primeiro:
                 self.btn_group.desenhar(self.screen, self.indice_selecionado)
 
         self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
         self.face.desenhar(self.tempo)
 
-        if text != self.ultimo_texto and self.estado != Estado.DORMINDO:
-            self.tts.speak(text)
-            self.falando = True
-            self.ultimo_texto = text
-        elif self.falando and not self.tts.speaking:
-            self.falando = False
+        if self.falando_primeiro:
+            if not self.falando and text:
+                self.tts.speak(text)
+                self.falando = True
+                self.ultimo_texto = text
+            elif self.falando and not self.tts.speaking:
+                self.falando = False
+                self.falando_primeiro = False
+                self.btn_group.start_ms = pygame.time.get_ticks()
+        else:
+            if text != self.ultimo_texto and self.estado != Estado.DORMINDO:
+                self.tts.speak(text)
+                self.falando = True
+                self.ultimo_texto = text
+            elif self.falando and not self.tts.speaking:
+                self.falando = False
 
         pygame.display.flip()
 
