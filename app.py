@@ -29,9 +29,9 @@ class Estado(Enum):
 STATE_CONFIG = {
     Estado.INICIO: ("Ola! O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
     Estado.SELECIONAR_SENTIMENTO: ("Como você está se sentindo agora?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
-    Estado.TIPO_SENTIMENTO: ("Esse sentimento é positivo ou negativo?", ["Bom", "Ruim", "Não sei"]),
+    Estado.TIPO_SENTIMENTO: ("Esse sentimento é positivo ou negativo?", ["Positivo", "Negativo", "Não sei"]),
     Estado.ESCALA: ("Em uma escala de 1 a 5, qual a intensidade desse sentimento?", [str(i) for i in range(1, 6)]),
-    Estado.OBRIGADO: ("Ótimo! Seus dados foram registrados com sucesso.", []),
+    Estado.OBRIGADO: ("Obrigado! Seus dados foram registrados com sucesso.", []),
     Estado.BATIMENTO: ("Seu batimento cardíaco é de {} bpm.", ["OK"]),
     Estado.BATIMENTO_FINALIZADO: ("", []),
     Estado.AJUDA_IMEDIATA: ("Vejo que você precisa de apoio. Vamos tentar relaxar. O que prefere?", ["Respiração", "Grounding", "Voltar"]),
@@ -51,7 +51,7 @@ class App:
 
         largura, altura = self.screen.get_size()
         self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
-        self.fonte_texto = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+        self.fonte_texto = pygame.font.SysFont("Arial", int(altura*0.08), bold=True)
         self.fonte_botao = "Arial"
 
         self.texto = TextRenderer(self.screen, self.fonte_texto)
@@ -68,7 +68,7 @@ class App:
         self.tts = TTS(rate=200)                                       
         self.ultimo_texto = ""
         self.ultimo_evento = pygame.time.get_ticks() / 1000
-        self.segundos_dormir = 5
+        self.segundos_dormir = 30
 
         self.falando_primeiro = False 
 

@@ -9,7 +9,7 @@ FADE_T = 0.3
 DELAY_BTWN = 0.2
 
 class TextRenderer:
-    def __init__(self, screen, fonte, max_width_ratio=0.8, top_ratio=0.2, color=PRETO):
+    def __init__(self, screen, fonte, max_width_ratio=0.9, top_ratio=0.15, color=PRETO):
         self.screen = screen
         self.fonte = fonte
         self.max_width_ratio = max_width_ratio
@@ -74,7 +74,7 @@ class Botao:
 def criar_botoes(screen_width, screen_height, rotulos):
     if rotulos is None or len(rotulos) == 0:
         return []
-    margem, espaco = screen_width * 0.05, screen_width * 0.02
+    margem, espaco = screen_width * 0.1, screen_width * 0.05
     altura_botao = screen_height * 0.18
     largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
     y = screen_height * 0.8
