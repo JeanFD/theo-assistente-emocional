@@ -1,35 +1,47 @@
-import pyttsx3
-import platform
+import pygame
 import threading
+import os
 
 class TTS:
-    def __init__(self, rate=150, volume=1.0, voice=None):
-        system = platform.system().lower()
-        if system == 'windows':
-            driver = 'sapi5'
-        else:
-            driver = 'espeak'
+    """
+    Reproduz áudios pré-carregados a partir da pasta 'audio' ao lado deste módulo.
+    Cada arquivo deve ter nome de chave correspondente (sem extensão).
+    """
+    def __init__(self, audio_dir="audio", volume=1.0):
+        # Inicializa o mixer do pygame
+       
+        # Define caminho absoluto da pasta de áudios (mesmo diretório de tts.py)
+        base_dir = os.path.dirname(__file__)
+        self.audio_dir = os.path.join(base_dir, audio_dir)
+        if not os.path.isdir(self.audio_dir):
+            raise FileNotFoundError(f"Diretório de áudio não encontrado: '{self.audio_dir}'")
 
-        try:
-            self.engine = pyttsx3.init(driver)
-        except Exception as e:
-            print(f"[TTS] não conseguiu init('{driver}'): {e}, tentando padrão")
-            self.engine = pyttsx3.init()
-
-        self.engine.setProperty('rate', rate)
-        self.engine.setProperty('volume', volume)
-        if voice:
-            self.engine.setProperty('voice', voice)
-
-        self._lock = threading.Lock()
+        self.sounds = {}
+        self.channel = pygame.mixer.Channel(0)
+        self.volume = volume
         self.speaking = False
 
-    def speak(self, text: str):
+        # Carrega todos os arquivos de áudio válidos
+        for fname in os.listdir(self.audio_dir):
+            if fname.lower().endswith((".wav", ".ogg", ".mp3")):
+                key = os.path.splitext(fname)[0]
+                path = os.path.join(self.audio_dir, fname)
+                sound = pygame.mixer.Sound(path)
+                sound.set_volume(self.volume)
+                self.sounds[key] = sound
+
+    def speak(self, key = "inicio"):
+        # Reproduz o áudio correspondente à chave (nome do arquivo sem extensão)
+        sound = self.sounds.get(key)
+        if not sound:
+            print(f"[TTS] Áudio para '{key}' não encontrado em '{self.audio_dir}'.")
+            return
+
         def _run():
-            with self._lock:
-                self.speaking = True
-                self.engine.say(text)
-                self.engine.runAndWait()
-                self.speaking = False 
-        thread = threading.Thread(target=_run, daemon=True)
-        thread.start()
+            self.speaking = True
+            self.channel.play(sound)
+            while self.channel.get_busy():
+                pygame.time.wait(100)
+            self.speaking = False
+
+        threading.Thread(target=_run, daemon=True).start()
