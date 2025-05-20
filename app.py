@@ -55,6 +55,7 @@ STATE_CONFIG = {
 
 class App:
     def __init__(self):
+        pygame.mixer.pre_init(44100, -16, 2, 2048)
         pygame.init()
         info = pygame.display.Info()
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
