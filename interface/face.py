@@ -1,10 +1,10 @@
-import math, pygame
+import math
 
 ROSTO_BASE = ["O -- O", "-- -- --", "O o O", "-- o --", "^ -- ^"]
 
 class Face:
     def __init__(self, fonte, screen, velocidade_fala=6):
-        self.fonte = pygame.font.SysFont("JandaManateeSolid.ttf", int(screen.get_height() * 0.8), bold=True)
+        self.fonte = fonte
         self.screen = screen
         self.velocidade_fala = velocidade_fala
 
