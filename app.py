@@ -1,11 +1,13 @@
 import pygame, sys
 from enum import Enum, auto
-from interface.ui import TextRenderer, GrupoBotoes
+from interface.ui import *
 from interface.face import Face
 from interface.transicao import Transicao
 from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
+from pathlib import Path
+import json
 
 FADE_T = 0.3   
 DELAY_BTWN = 0.2
@@ -25,6 +27,7 @@ class Estado(Enum):
     RESPIRACAO = auto()
     GROUNDING = auto()
     DORMINDO = auto()
+    CONFIG = auto()
 
 AUDIO_KEYS = {
     Estado.INICIO: "inicio",
@@ -50,7 +53,8 @@ STATE_CONFIG = {
     Estado.AJUDA_IMEDIATA: ("Vejo que você precisa de apoio. Vamos tentar relaxar. O que prefere?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
-    Estado.DORMINDO: ("", [])
+    Estado.CONFIG: ("Configurações: Ajuste idade e sexo", ["Sexo: M", "Sexo: F", "Idade: +", "Idade: -", "Voltar"]),
+    Estado.DORMINDO: ("", []),
 }
 
 class App:
@@ -61,7 +65,7 @@ class App:
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
 
-        pygame.mouse.set_visible(False)
+        # pygame.mouse.set_visible(False)
 
         largura, altura = self.screen.get_size()
         self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
@@ -72,9 +76,23 @@ class App:
         self.face = Face(self.fonte_rosto, self.screen)
         self.btn_group = GrupoBotoes(largura, altura, STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
 
+        self.botao_config = BotaoConfiguracao(largura, altura, pygame.font.SysFont("Symbola", 24, bold=True))
+
         self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
-        self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
+        self.registro = {
+            "sentimento": None, 
+            "tipo": None, 
+            "escala": None, 
+            "bpm": None
+        }
+        self.config = {
+            "sexo": None,
+            "idade": None,
+        }
+        cfg_path = Path("config.json")
+        if cfg_path.exists():
+            self.config.update(json.load(cfg_path))
 
         self.tempo = 0.0
         self.tempo_obrigado = 0
@@ -132,6 +150,27 @@ class App:
                 if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     clicked = -1
             elif evento.type == pygame.MOUSEBUTTONDOWN:
+                if self.botao_config.clicado(evento.pos) and self.estado != Estado.DORMINDO:
+                    self.estado = Estado.CONFIG
+
+                    labels = STATE_CONFIG[Estado.CONFIG][1]
+                    self.btn_group = GrupoBotoes(
+                        self.screen.get_width(),
+                        self.screen.get_height(),
+                        labels,
+                        self.fonte_botao
+                    )
+                    self.indice_selecionado = 0
+                    # já posso desenhar botões imediatamente
+                    self.falando_primeiro = False
+                    continue
+                if self.estado != Estado.DORMINDO:
+                    self.ultimo_evento = self.tempo
+                    for i, btn in enumerate(self.btn_group.buttons):
+                        if btn.rect.collidepoint(evento.pos):
+                            clicked = i
+                            break
+                
                 if self.estado != Estado.DORMINDO:
                     self.ultimo_evento = self.tempo
                 for i, btn in enumerate(self.btn_group.buttons):
@@ -150,6 +189,21 @@ class App:
             if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
             elif clicked == 1: self.estado = Estado.BATIMENTO
             elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
+        elif self.estado == Estado.CONFIG:
+            if clicked == 0:
+                self.registro['sexo'] = "Masculino"
+            elif clicked == 1:
+                self.registro['sexo'] = "Feminino"
+            elif clicked == 2:
+                self.registro['idade'] = self.registro.get("idade", 0) + 1
+            elif clicked == 3:
+                self.registro['idade'] = max(0, self.registro.get("idade", 0) - 1)
+            elif clicked == 4:
+                with open("config.json","w") as f:
+                    json.dump(self.config, f)
+                    self.estado = Estado.INICIO
+                self.estado = Estado.INICIO
+                
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
             self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
             self.estado = Estado.TIPO_SENTIMENTO if clicked == 3 else Estado.ESCALA
@@ -219,6 +273,9 @@ class App:
         self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
         self.face.desenhar(self.tempo)
 
+        if self.estado == Estado.INICIO:
+            self.botao_config.desenhar(self.screen)
+
         if self.falando_primeiro:
             if not self.falando and key:
                 self.tts.speak(key)     
@@ -236,4 +293,3 @@ class App:
             elif self.falando and not self.tts.speaking:
                 self.falando = False
         pygame.display.flip()
-

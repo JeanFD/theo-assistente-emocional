@@ -110,3 +110,16 @@ class GrupoBotoes:
         for i, btn in enumerate(self.buttons):
             btn.atualiza_alpha(now, self.start_ms, i, self.fade_dly, self.fade_dur)
             btn.desenhar(screen, btn.fonte, i==selected_index, btn.alpha)
+
+class BotaoConfiguracao:
+    def __init__(self, largura, altura, fonte):
+        self.rect = pygame.Rect(largura - 80, 20, 60, 40)
+        self.fonte = fonte
+
+    def desenhar(self, screen):
+        pygame.draw.rect(screen, (200, 200, 200), self.rect, border_radius = 10)
+        texto = self.fonte.render("⚙", True, (0, 0, 0))
+        screen.blit(texto, texto.get_rect(center=self.rect.center))
+
+    def clicado(self, pos):
+        return self.rect.collidepoint(pos)
