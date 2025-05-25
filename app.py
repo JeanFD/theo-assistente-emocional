@@ -53,7 +53,7 @@ STATE_CONFIG = {
     Estado.AJUDA_IMEDIATA: ("Vejo que você precisa de apoio. Vamos tentar relaxar. O que prefere?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
-    Estado.CONFIG: ("Configurações: Ajuste idade e sexo", ["Sexo: M", "Sexo: F", "Idade: +", "Idade: -", "Voltar"]),
+    Estado.CONFIG: ("", ["Sexo: M", "Sexo: F", "Idade: +", "Idade: -", "Voltar"]),
     Estado.DORMINDO: ("", []),
 }
 
@@ -88,11 +88,15 @@ class App:
         }
         self.config = {
             "sexo": None,
-            "idade": None,
+            "idade": 0,  # Inicializar com 0 ao invés de None
         }
         cfg_path = Path("config.json")
         if cfg_path.exists():
-            self.config.update(json.load(cfg_path))
+            with open(cfg_path) as f:
+                loaded_config = json.load(f)
+                # Garantir que idade seja sempre número
+                loaded_config['idade'] = int(loaded_config.get('idade', 0)) if loaded_config.get('idade') not in (None, "") else 0
+                self.config.update(loaded_config)
 
         self.tempo = 0.0
         self.tempo_obrigado = 0
@@ -152,18 +156,22 @@ class App:
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 if self.botao_config.clicado(evento.pos) and self.estado != Estado.DORMINDO:
                     self.estado = Estado.CONFIG
-
-                    labels = STATE_CONFIG[Estado.CONFIG][1]
+                    
+                    labels = ["Masculino","Feminino","+","–","Confirmar"]
                     self.btn_group = GrupoBotoes(
                         self.screen.get_width(),
                         self.screen.get_height(),
                         labels,
-                        self.fonte_botao
+                        self.fonte_botao,
+                        base_color=CINZA,
+                        select_color=SELECIONADO,
+                        fade_duration=0,    # nenhum fade-in
+                        fade_delay=0        # sem atraso
                     )
                     self.indice_selecionado = 0
-                    # já posso desenhar botões imediatamente
                     self.falando_primeiro = False
                     continue
+
                 if self.estado != Estado.DORMINDO:
                     self.ultimo_evento = self.tempo
                     for i, btn in enumerate(self.btn_group.buttons):
@@ -184,25 +192,56 @@ class App:
     def on_click(self, clicked):
         self.fade_start_ms = pygame.time.get_ticks()
 
+        if self.estado == Estado.CONFIG:
+            if clicked == 0:
+                self.config['sexo'] = "Masculino"
+            elif clicked == 1:
+                self.config['sexo'] = "Feminino"
+            elif clicked == 2:
+                # idade +
+                base = self.config.get("idade") or 0
+                self.config['idade'] = min(120, base + 1)
+            elif clicked == 3:
+                # idade –
+                base = self.config.get("idade") or 0
+                self.config['idade'] = max(0, base - 1)
+            elif clicked == 4:
+                # confirmar: salva e retorna ao INICIO
+                with open("config.json","w") as f:
+                    json.dump(self.config, f)
+                self.estado = Estado.INICIO
+                # recria botões iniciais
+                labels = STATE_CONFIG[Estado.INICIO][1]
+                self.btn_group = GrupoBotoes(
+                    self.screen.get_width(),
+                    self.screen.get_height(),
+                    labels,
+                    self.fonte_botao
+                )
+                self.indice_selecionado = 0
+                self.falando_primeiro = True
+            # após qualquer clique 0–3, apenas atualiza o próprio btn_group:
+            if clicked in (0,1,2,3):
+                labels = ["Masculino", "Feminino", "+", "-", "Confirmar"]
+                self.btn_group = GrupoBotoes(
+                    self.screen.get_width(),
+                    self.screen.get_height(),
+                    labels,
+                    self.fonte_botao
+                )
+                self.indice_selecionado = 0
+                # mantém os botões visíveis
+                self.falando_primeiro = False
+            return
+
+        # … resto do on_click para outros estados …
+
+
         if self.estado == Estado.INICIO:
             self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
             if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
             elif clicked == 1: self.estado = Estado.BATIMENTO
             elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
-        elif self.estado == Estado.CONFIG:
-            if clicked == 0:
-                self.registro['sexo'] = "Masculino"
-            elif clicked == 1:
-                self.registro['sexo'] = "Feminino"
-            elif clicked == 2:
-                self.registro['idade'] = self.registro.get("idade", 0) + 1
-            elif clicked == 3:
-                self.registro['idade'] = max(0, self.registro.get("idade", 0) - 1)
-            elif clicked == 4:
-                with open("config.json","w") as f:
-                    json.dump(self.config, f)
-                    self.estado = Estado.INICIO
-                self.estado = Estado.INICIO
                 
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
             self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
@@ -275,6 +314,20 @@ class App:
 
         if self.estado == Estado.INICIO:
             self.botao_config.desenhar(self.screen)
+
+        if self.estado == Estado.CONFIG:
+            # monta texto com sexo e idade
+            sexo_txt  = self.config.get('sexo') or "—"
+            idade_txt = self.config.get('idade', 0)
+            texto_cfg = f"Configurações \n Sexo: {sexo_txt} \n Idade: {idade_txt} anos"
+            # desenha no topo
+            self.texto.desenhar(texto_cfg)
+            # desenha só os botões de CONFIG
+            if self.btn_group.buttons:
+                self.btn_group.desenhar(self.screen, self.indice_selecionado)
+            # não desenha rosto nem outros elementos
+            pygame.display.flip()
+            return
 
         if self.falando_primeiro:
             if not self.falando and key:
