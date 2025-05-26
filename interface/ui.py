@@ -16,7 +16,8 @@ class TextRenderer:
         self.top_ratio = top_ratio
         self.color = color
 
-    def desenhar(self, texto, surface=None):
+    # --- MÉTODO CORRIGIDO ABAIXO ---
+    def desenhar(self, texto, surface=None, cor=None): # <<< 1. ADICIONADO "cor=None"
         target_surface = surface if surface is not None else self.screen
         max_width = self.screen.get_width() * self.max_width_ratio
         words, lines, line = texto.split(' '), [], ''
@@ -28,14 +29,20 @@ class TextRenderer:
                 lines.append(line)
                 line = word
         if line: lines.append(line)
-            
+
+        # Determina qual cor usar: a cor passada como argumento ou a padrão.
+        draw_color = cor if cor is not None else self.color # <<< 2. LÓGICA DA COR
+
         line_h = self.fonte.get_linesize()
         total_h = line_h * len(lines)
         y = self.screen.get_height() * self.top_ratio - total_h/2
         for i, l in enumerate(lines):
-            surf = self.fonte.render(l, True, self.color)
+            # Usa a cor determinada ("draw_color") para renderizar
+            surf = self.fonte.render(l, True, draw_color) # <<< 3. APLICA A COR
             rect = surf.get_rect(center=(self.screen.get_width()//2, y + i*line_h))
-            self.screen.blit(surf, rect)
+            
+            # Blit no target_surface, não sempre no self.screen
+            target_surface.blit(surf, rect)
 
 
 class Botao:
@@ -142,3 +149,5 @@ class BotaoConfiguracao:
 
     def clicado(self, pos):
         return self.rect.collidepoint(pos)
+    
+

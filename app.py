@@ -1,5 +1,9 @@
 import pygame, sys
 from enum import Enum, auto
+# Alterado: Importa as bibliotecas para threading
+import threading
+import queue
+
 from interface.ui import *
 from interface.face import Face
 from interface.transicao import Transicao
@@ -115,8 +119,22 @@ class App:
         self.batimento_resultado_texto = ""
         self.batimento_audio_key = ""
 
-        # Alterado: Novo sinalizador para controlar o início da medição
-        self.deve_iniciar_medicao = False
+        # Alterado: Atributos para controlar a thread de medição
+        self.medicao_thread = None
+        self.medicao_queue = queue.Queue()
+
+
+    # Alterado: Nova função que será executada na thread para não bloquear a UI
+    def _thread_medir_batimentos(self):
+        """
+        Esta função executa a leitura do sensor em segundo plano.
+        Quando termina, coloca o resultado numa "fila" (queue) para o programa principal pegar.
+        """
+        print("Thread de medição iniciada.")
+        bpm = ler_batimentos()  # Esta é a chamada que congela, mas agora está na thread.
+        self.medicao_queue.put(bpm) # Coloca o resultado na fila.
+        print(f"Thread de medição finalizada. BPM: {bpm}")
+
 
     def run(self):
         while True:
@@ -126,42 +144,12 @@ class App:
             self.handle_events()
             self.update_tempo()
             self.render()
-
-            # Alterado: Lógica de medição movida para o loop principal
-            # Isso garante que a tela "Medindo..." seja renderizada antes do programa pausar
-            if self.deve_iniciar_medicao:
-                self.deve_iniciar_medicao = False # Desativa o sinalizador para não medir de novo
-
-                # A função bloqueante é chamada aqui. A tela já está mostrando "Medindo..."
-                bpm = ler_batimentos()
-                self.registro['bpm'] = bpm
-                
-                status_texto = "Normal"
-                audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_normal"]
-                if bpm < 60:
-                    status_texto = "Abaixo do normal"
-                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_baixo"]
-                elif bpm > 100:
-                    status_texto = "Acima do normal"
-                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_alto"]
-                
-                enviar_servidor(self.registro)
-
-                self.batimento_resultado_texto = f"Seu batimento: {bpm} bpm.\n({status_texto})\n\nDados enviados. Clique para voltar."
-                self.batimento_audio_key = audio_key_para_tocar
-                
-                # Transiciona para o estado de resultado
-                self.estado = Estado.BATIMENTO_RESULTADO
-                self.ultimo_texto = ""
-                self.falando_primeiro = True
-
+            
             pygame.display.flip()
-
 
     def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
-            # Alterado: Ignora todos os eventos enquanto estiver medindo
             if self.estado == Estado.BATIMENTO_MEDINDO:
                 continue
 
@@ -248,11 +236,14 @@ class App:
             self.estado = Estado.INICIO
         
         elif self.estado == Estado.BATIMENTO_INSTRUCAO:
-            # Alterado: Apenas muda o estado e ativa o sinalizador. A medição foi movida.
             self.estado = Estado.BATIMENTO_MEDINDO
-            self.deve_iniciar_medicao = True
             self.ultimo_texto = ""; self.falando_primeiro = True
-            return # Retorna para evitar a recriação de botões
+            
+            # Alterado: Inicia a thread de medição se ela não estiver ativa
+            if self.medicao_thread is None or not self.medicao_thread.is_alive():
+                self.medicao_thread = threading.Thread(target=self._thread_medir_batimentos, daemon=True)
+                self.medicao_thread.start()
+            return
 
         elif self.estado == Estado.BATIMENTO_RESULTADO:
             self.estado = Estado.INICIO; self.falando_primeiro = True
@@ -271,6 +262,39 @@ class App:
         self.ultimo_texto = ""
 
     def update_tempo(self):
+        # Alterado: Verifica se a medição em segundo plano terminou
+        if self.estado == Estado.BATIMENTO_MEDINDO:
+            try:
+                # Tenta pegar o resultado da fila sem bloquear
+                bpm = self.medicao_queue.get_nowait()
+                
+                # Se conseguiu, a medição acabou! Processa o resultado.
+                self.registro['bpm'] = bpm
+                
+                status_texto = "Normal"
+                audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_normal"]
+                if bpm < 60:
+                    status_texto = "Abaixo do normal"
+                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_baixo"]
+                elif bpm > 100:
+                    status_texto = "Acima do normal"
+                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_alto"]
+                
+                enviar_servidor(self.registro)
+
+                self.batimento_resultado_texto = f"Seu batimento: {bpm} bpm.\n({status_texto})\n\nDados enviados."
+                self.batimento_audio_key = audio_key_para_tocar
+                
+                # Muda para o estado de resultado
+                self.estado = Estado.BATIMENTO_RESULTADO
+                self.ultimo_texto = ""
+                self.falando_primeiro = True
+
+            except queue.Empty:
+                # Se a fila está vazia, a medição ainda está em andamento.
+                # O programa continua normalmente, permitindo que as animações rodem.
+                pass
+
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
             if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
                 self.estado = Estado.DORMINDO; self.indice_selecionado = 0; self.tempo_obrigado = None
@@ -295,7 +319,7 @@ class App:
 
         if self.estado != Estado.DORMINDO:
             if self.estado == Estado.BATIMENTO_RESULTADO:
-                self.texto.desenhar(self.batimento_resultado_texto, self.cor_rosto_atual)
+                self.texto.desenhar(self.batimento_resultado_texto, cor=self.cor_rosto_atual)
             elif self.estado == Estado.CONFIG:
                 if self.config_precisa_atualizar:
                     sexo_txt = self.config.get('sexo') or "—"; idade_txt = self.config.get('idade', 0)
@@ -310,8 +334,7 @@ class App:
                 if self.config_text_surface: self.screen.blit(self.config_text_surface, self.config_text_rect)
                 if self.btn_group.buttons: self.btn_group.desenhar(self.screen, self.indice_selecionado)
             else:
-                self.texto.desenhar(text,self.cor_rosto_atual)
-                # Alterado: Não desenha botões no estado de medição
+                self.texto.desenhar(text, cor=self.cor_rosto_atual)
                 if self.btn_group.buttons and not self.falando_primeiro and self.estado != Estado.BATIMENTO_MEDINDO:
                     self.btn_group.desenhar(self.screen, self.indice_selecionado)
         
@@ -339,5 +362,3 @@ class App:
                 self.falando = True; self.ultimo_texto = key
             elif self.falando and not self.tts.speaking:
                 self.falando = False
-        
-        # O pygame.display.flip() foi movido para o final do loop principal 'run'
