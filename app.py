@@ -1,11 +1,13 @@
 import pygame, sys
 from enum import Enum, auto
-from interface.ui import TextRenderer, GrupoBotoes
+from interface.ui import *
 from interface.face import Face
 from interface.transicao import Transicao
 from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 from comunicacao.envio_dados import enviar_servidor
+from pathlib import Path
+import json
 
 FADE_T = 0.3   
 DELAY_BTWN = 0.2
@@ -25,6 +27,7 @@ class Estado(Enum):
     RESPIRACAO = auto()
     GROUNDING = auto()
     DORMINDO = auto()
+    CONFIG = auto()
 
 AUDIO_KEYS = {
     Estado.INICIO: "inicio",
@@ -50,7 +53,8 @@ STATE_CONFIG = {
     Estado.AJUDA_IMEDIATA: ("Vejo que você precisa de apoio. Vamos tentar relaxar. O que prefere?", ["Respiração", "Grounding", "Voltar"]),
     Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
-    Estado.DORMINDO: ("", [])
+    Estado.CONFIG: ("", ["Sexo: M", "Sexo: F", "Idade: +", "Idade: -", "Concluir"]),
+    Estado.DORMINDO: ("", []),
 }
 
 class App:
@@ -61,7 +65,7 @@ class App:
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
 
-        pygame.mouse.set_visible(False)
+        # pygame.mouse.set_visible(False)
 
         largura, altura = self.screen.get_size()
         self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
@@ -72,9 +76,26 @@ class App:
         self.face = Face(self.fonte_rosto, self.screen)
         self.btn_group = GrupoBotoes(largura, altura, STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
 
+        self.botao_config = BotaoConfiguracao(largura, altura, pygame.font.SysFont("Symbola", 24, bold=True))
+
         self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
-        self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
+        self.registro = {
+            "sentimento": None, 
+            "tipo": None, 
+            "escala": None, 
+            "bpm": None
+        }
+        self.config = {
+            "sexo": None,
+            "idade": 0,
+        }
+        cfg_path = Path("config.json")
+        if cfg_path.exists():
+            with open(cfg_path) as f:
+                loaded_config = json.load(f)
+                loaded_config['idade'] = int(loaded_config.get('idade', 0)) if loaded_config.get('idade') not in (None, "") else 0
+                self.config.update(loaded_config)
 
         self.tempo = 0.0
         self.tempo_obrigado = 0
@@ -92,6 +113,9 @@ class App:
         self.cor_rosto_atual = BRANCO
 
         self.fade_start_ms = pygame.time.get_ticks()
+        self.config_text_surface = None
+        self.config_text_rect = None
+        self.config_precisa_atualizar = True
     
     def run(self):
         while True:
@@ -132,6 +156,31 @@ class App:
                 if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     clicked = -1
             elif evento.type == pygame.MOUSEBUTTONDOWN:
+                if self.botao_config.clicado(evento.pos) and self.estado != Estado.DORMINDO:
+                    self.estado = Estado.CONFIG
+                    
+                    labels = ["Masculino","Feminino","+","–","Confirmar"]
+                    self.btn_group = GrupoBotoes(
+                        self.screen.get_width(),
+                        self.screen.get_height(),
+                        labels,
+                        self.fonte_botao,
+                        base_color=CINZA,
+                        select_color=SELECIONADO,
+                        fade_duration=100,
+                        fade_delay=50
+                    )
+                    self.indice_selecionado = 0
+                    self.falando_primeiro = False
+                    return
+
+                if self.estado != Estado.DORMINDO:
+                    self.ultimo_evento = self.tempo
+                    for i, btn in enumerate(self.btn_group.buttons):
+                        if btn.rect.collidepoint(evento.pos):
+                            clicked = i
+                            break
+                
                 if self.estado != Estado.DORMINDO:
                     self.ultimo_evento = self.tempo
                 for i, btn in enumerate(self.btn_group.buttons):
@@ -145,11 +194,57 @@ class App:
     def on_click(self, clicked):
         self.fade_start_ms = pygame.time.get_ticks()
 
+        if self.estado == Estado.CONFIG:
+            dados_mudaram = False
+            if clicked == 0 and self.config.get('sexo') != "Masculino":
+                self.config['sexo'] = "Masculino"
+                dados_mudaram = True
+            elif clicked == 1 and self.config.get('sexo') != "Feminino":
+                self.config['sexo'] = "Feminino"
+                dados_mudaram = True
+            elif clicked == 2:
+                self.config['idade'] = min(120, self.config.get("idade", 0) + 1)
+                dados_mudaram = True
+            elif clicked == 3:
+                self.config['idade'] = max(0, self.config.get("idade", 0) - 1)
+                dados_mudaram = True
+
+            if dados_mudaram:
+                self.config_precisa_atualizar = True
+            
+            if clicked == 4:
+                with open("config.json", "w") as f:
+                    json.dump(self.config, f)
+                self.estado = Estado.INICIO
+                labels = STATE_CONFIG[Estado.INICIO][1]
+                self.btn_group = GrupoBotoes(
+                    self.screen.get_width(),
+                    self.screen.get_height(),
+                    labels,
+                    self.fonte_botao
+                )
+                self.indice_selecionado = 0
+                self.falando_primeiro = True
+                self.ultimo_texto = ""
+                self.config_precisa_atualizar = True 
+                return
+                
+            if clicked in (0, 1):
+                for i, btn in enumerate(self.btn_group.buttons):
+                    if i == 0:
+                        btn.set_text("Masculino", selecionado=(self.config.get('sexo') == "Masculino"))
+                    elif i == 1:
+                        btn.set_text("Feminino", selecionado=(self.config.get('sexo') == "Feminino"))
+            
+            self.indice_selecionado = clicked
+            return
+
         if self.estado == Estado.INICIO:
             self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
             if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
             elif clicked == 1: self.estado = Estado.BATIMENTO
             elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
+                
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
             self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
             self.estado = Estado.TIPO_SENTIMENTO if clicked == 3 else Estado.ESCALA
@@ -177,11 +272,10 @@ class App:
         elif self.estado in (Estado.RESPIRACAO, Estado.GROUNDING):
             self.estado = Estado.AJUDA_IMEDIATA
 
-        # Atualiza botões para novo estado
         labels = STATE_CONFIG[self.estado][1]
         self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), labels, self.fonte_botao)
         self.indice_selecionado = 0
-        self.falando_primeiro = True  # ADICIONEI
+        self.falando_primeiro = True
         self.ultimo_texto = ""
 
     def update_tempo(self):
@@ -191,41 +285,83 @@ class App:
                 self.indice_selecionado = 0
                 self.tempo_obrigado = None
                 self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
-        # Vai dormir se ficar inativo
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
             self.estado = Estado.DORMINDO
 
     def render(self):
-        if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
-            self.fade_fundo.start(self.cor_fundo_atual, PRETO, self.tempo)
-            self.fade_rosto.start(self.cor_rosto_atual, BRANCO, self.tempo)
-        elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0,0,0):
-            self.fade_fundo.start(self.cor_fundo_atual, BRANCO, self.tempo)
-            self.fade_rosto.start(self.cor_rosto_atual, PRETO, self.tempo)
+        if self.estado != Estado.CONFIG:
+            if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
+                self.fade_fundo.start(self.cor_fundo_atual, PRETO, self.tempo)
+                self.fade_rosto.start(self.cor_rosto_atual, BRANCO, self.tempo)
+                self.screen.fill(self.cor_fundo_atual)
+            elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0,0,0):
+                self.fade_fundo.start(self.cor_fundo_atual, BRANCO, self.tempo)
+                self.fade_rosto.start(self.cor_rosto_atual, PRETO, self.tempo)
+                self.screen.fill(self.cor_fundo_atual)
+            else:
+                self.screen.fill(BRANCO)
 
-        nova_cor_fundo, _ = self.fade_fundo.update(self.tempo)
-        nova_cor_rosto, _ = self.fade_rosto.update(self.tempo)
-        self.cor_fundo_atual = nova_cor_fundo
-        self.cor_rosto_atual = nova_cor_rosto
-        self.screen.fill(self.cor_fundo_atual)
+            nova_cor_fundo, _ = self.fade_fundo.update(self.tempo)
+            nova_cor_rosto, _ = self.fade_rosto.update(self.tempo)
+            self.cor_fundo_atual = nova_cor_fundo
+            self.cor_rosto_atual = nova_cor_rosto
+        
+        self.screen.fill(self.cor_fundo_atual if self.estado != Estado.CONFIG else BRANCO)
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
         key = AUDIO_KEYS.get(self.estado) 
         if self.estado != Estado.DORMINDO:
-            self.texto.desenhar(text)
-            if self.btn_group.buttons and not self.falando_primeiro:
-                self.btn_group.desenhar(self.screen, self.indice_selecionado)
+            if self.estado == Estado.CONFIG:
+                if self.config_precisa_atualizar:
+                    sexo_txt = self.config.get('sexo') or "—"
+                    idade_txt = self.config.get('idade', 0)
+                    texto_cfg = f"Configurações\nSexo: {sexo_txt}\nIdade: {idade_txt} anos"
+                    self.config_text_surface = self.fonte_texto.render(texto_cfg.split('\n')[0], True, PRETO)
+        
+                    lines = texto_cfg.split('\n')
+                    rendered_lines = [self.fonte_texto.render(line, True, PRETO) for line in lines]
+                    
+                    total_height = sum(line.get_height() for line in rendered_lines)
+                    max_width = max(line.get_width() for line in rendered_lines)
+                    self.config_text_surface = pygame.Surface((max_width, total_height), pygame.SRCALPHA)
 
+                    current_y = 0
+                    for line_surface in rendered_lines:
+                        self.config_text_surface.blit(line_surface, (0, current_y))
+                        current_y += line_surface.get_height()
+
+                    screen_rect = self.screen.get_rect()
+                    self.config_text_rect = self.config_text_surface.get_rect(center=(screen_rect.centerx, int(screen_rect.height * 0.2)))
+                    
+                    self.config_precisa_atualizar = False
+
+                if self.config_text_surface:
+                    self.screen.blit(self.config_text_surface, self.config_text_rect)
+                
+                if self.btn_group.buttons:
+                    self.btn_group.desenhar(self.screen, self.indice_selecionado)
+            else:
+                text, _ = STATE_CONFIG.get(self.estado, ("", []))
+                self.texto.desenhar(text) 
+                if self.btn_group.buttons and not self.falando_primeiro:
+                    self.btn_group.desenhar(self.screen, self.indice_selecionado)
+        
         self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
         self.face.desenhar(self.tempo)
-
+        
+        if self.estado == Estado.INICIO:
+            self.botao_config.desenhar(self.screen)
+            
         if self.falando_primeiro:
             if not self.falando and key:
-                self.tts.speak(key)     
+                self.tts.speak(key)
                 self.falando = True
-                self.ultimo_texto = key 
+                self.ultimo_texto = key
             elif self.falando and not self.tts.speaking:
                 self.falando = False
+                self.falando_primeiro = False
+                self.btn_group.start_ms = pygame.time.get_ticks()
+            elif not key:
                 self.falando_primeiro = False
                 self.btn_group.start_ms = pygame.time.get_ticks()
         else:
@@ -235,5 +371,5 @@ class App:
                 self.ultimo_texto = key
             elif self.falando and not self.tts.speaking:
                 self.falando = False
+                
         pygame.display.flip()
-
