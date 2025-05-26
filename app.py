@@ -32,7 +32,6 @@ class Estado(Enum):
     DORMINDO = auto()
     CONFIG = auto()
 
-# Chaves de áudio para os estados
 AUDIO_KEYS = {
     Estado.INICIO: "inicio",
     Estado.SELECIONAR_SENTIMENTO: "selecionar_sentimento",
@@ -44,7 +43,6 @@ AUDIO_KEYS = {
     Estado.AJUDA_IMEDIATA: "ajuda_imediata",
     Estado.RESPIRACAO: "respiracao",
     Estado.GROUNDING: "grounding",
-    # Alterado: Adicionei chaves para os resultados pré-gravados
     "batimento_resultado_normal": "batimento_resultado_normal",
     "batimento_resultado_alto": "batimento_resultado_alto",
     "batimento_resultado_baixo": "batimento_resultado_baixo",
@@ -115,20 +113,58 @@ class App:
         self.config_precisa_atualizar = True
         
         self.batimento_resultado_texto = ""
-        # Alterado: Esta variável vai guardar a CHAVE do áudio a ser tocado, não mais o texto
         self.batimento_audio_key = ""
+
+        # Alterado: Novo sinalizador para controlar o início da medição
+        self.deve_iniciar_medicao = False
 
     def run(self):
         while True:
             dt = self.clock.tick(60) / 1000.0
             self.tempo += dt
+            
             self.handle_events()
             self.update_tempo()
             self.render()
 
+            # Alterado: Lógica de medição movida para o loop principal
+            # Isso garante que a tela "Medindo..." seja renderizada antes do programa pausar
+            if self.deve_iniciar_medicao:
+                self.deve_iniciar_medicao = False # Desativa o sinalizador para não medir de novo
+
+                # A função bloqueante é chamada aqui. A tela já está mostrando "Medindo..."
+                bpm = ler_batimentos()
+                self.registro['bpm'] = bpm
+                
+                status_texto = "Normal"
+                audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_normal"]
+                if bpm < 60:
+                    status_texto = "Abaixo do normal"
+                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_baixo"]
+                elif bpm > 100:
+                    status_texto = "Acima do normal"
+                    audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_alto"]
+                
+                enviar_servidor(self.registro)
+
+                self.batimento_resultado_texto = f"Seu batimento: {bpm} bpm.\n({status_texto})\n\nDados enviados. Clique para voltar."
+                self.batimento_audio_key = audio_key_para_tocar
+                
+                # Transiciona para o estado de resultado
+                self.estado = Estado.BATIMENTO_RESULTADO
+                self.ultimo_texto = ""
+                self.falando_primeiro = True
+
+            pygame.display.flip()
+
+
     def handle_events(self):
         clicked = None
         for evento in pygame.event.get():
+            # Alterado: Ignora todos os eventos enquanto estiver medindo
+            if self.estado == Estado.BATIMENTO_MEDINDO:
+                continue
+
             if self.estado == Estado.DORMINDO and evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 self.estado = Estado.INICIO
                 self.ultimo_evento = self.tempo
@@ -185,16 +221,13 @@ class App:
             if clicked == 4:
                 with open("config.json", "w") as f: json.dump(self.config, f)
                 self.estado = Estado.INICIO
-                self.falando_primeiro = True
-                self.ultimo_texto = ""
-                self.config_precisa_atualizar = True
+                self.falando_primeiro = True; self.ultimo_texto = ""; self.config_precisa_atualizar = True
             else:
                 if clicked in (0, 1):
                     for i, btn in enumerate(self.btn_group.buttons):
                         if i == 0: btn.set_text("Masculino", selecionado=(self.config.get('sexo') == "Masculino"))
                         elif i == 1: btn.set_text("Feminino", selecionado=(self.config.get('sexo') == "Feminino"))
-                self.indice_selecionado = clicked
-                return
+                self.indice_selecionado = clicked; return
                 
         elif self.estado == Estado.INICIO:
             self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
@@ -210,43 +243,19 @@ class App:
             self.estado = Estado.ESCALA
         elif self.estado == Estado.ESCALA:
             self.registro['escala'] = STATE_CONFIG[self.estado][1][clicked]
-            enviar_servidor(self.registro)
-            self.estado = Estado.OBRIGADO
-            self.tempo_obrigado = self.tempo
+            enviar_servidor(self.registro); self.estado = Estado.OBRIGADO; self.tempo_obrigado = self.tempo
         elif self.estado == Estado.OBRIGADO:
             self.estado = Estado.INICIO
         
         elif self.estado == Estado.BATIMENTO_INSTRUCAO:
+            # Alterado: Apenas muda o estado e ativa o sinalizador. A medição foi movida.
             self.estado = Estado.BATIMENTO_MEDINDO
-            self.render()
-            
-            bpm = ler_batimentos()
-            self.registro['bpm'] = bpm
-            
-            status_texto = "Normal"
-            # Alterado: Define a chave de áudio com base no status
-            audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_normal"]
-            if bpm < 60:
-                status_texto = "Abaixo do normal"
-                audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_baixo"]
-            elif bpm > 100:
-                status_texto = "Acima do normal"
-                audio_key_para_tocar = AUDIO_KEYS["batimento_resultado_alto"]
-            
-            enviar_servidor(self.registro)
-
-            self.batimento_resultado_texto = f"Seu batimento: {bpm} bpm.\n({status_texto})\n\nDados enviados. Clique para voltar."
-            # Alterado: Armazena a chave de áudio para ser usada no render()
-            self.batimento_audio_key = audio_key_para_tocar
-            
-            self.estado = Estado.BATIMENTO_RESULTADO
-            self.ultimo_texto = ""
-            self.falando_primeiro = True
-            return
+            self.deve_iniciar_medicao = True
+            self.ultimo_texto = ""; self.falando_primeiro = True
+            return # Retorna para evitar a recriação de botões
 
         elif self.estado == Estado.BATIMENTO_RESULTADO:
-            self.estado = Estado.INICIO
-            self.falando_primeiro = True
+            self.estado = Estado.INICIO; self.falando_primeiro = True
 
         elif self.estado == Estado.AJUDA_IMEDIATA:
             if clicked == 0: self.estado = Estado.RESPIRACAO
@@ -264,9 +273,7 @@ class App:
     def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
             if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
-                self.estado = Estado.DORMINDO
-                self.indice_selecionado = 0
-                self.tempo_obrigado = None
+                self.estado = Estado.DORMINDO; self.indice_selecionado = 0; self.tempo_obrigado = None
                 self.btn_group = GrupoBotoes(self.screen.get_width(), self.screen.get_height(), STATE_CONFIG[Estado.INICIO][1], self.fonte_botao)
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
             self.estado = Estado.DORMINDO
@@ -274,16 +281,12 @@ class App:
     def render(self):
         if self.estado != Estado.CONFIG:
             if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
-                self.fade_fundo.start(self.cor_fundo_atual, PRETO, self.tempo)
-                self.fade_rosto.start(self.cor_rosto_atual, BRANCO, self.tempo)
+                self.fade_fundo.start(self.cor_fundo_atual, PRETO, self.tempo); self.fade_rosto.start(self.cor_rosto_atual, BRANCO, self.tempo)
             elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == PRETO:
-                self.fade_fundo.start(self.cor_fundo_atual, BRANCO, self.tempo)
-                self.fade_rosto.start(self.cor_rosto_atual, PRETO, self.tempo)
+                self.fade_fundo.start(self.cor_fundo_atual, BRANCO, self.tempo); self.fade_rosto.start(self.cor_rosto_atual, PRETO, self.tempo)
             
-            nova_cor_fundo, _ = self.fade_fundo.update(self.tempo)
-            nova_cor_rosto, _ = self.fade_rosto.update(self.tempo)
-            self.cor_fundo_atual = nova_cor_fundo
-            self.cor_rosto_atual = nova_cor_rosto
+            nova_cor_fundo, _ = self.fade_fundo.update(self.tempo); nova_cor_rosto, _ = self.fade_rosto.update(self.tempo)
+            self.cor_fundo_atual = nova_cor_fundo; self.cor_rosto_atual = nova_cor_rosto
         
         self.screen.fill(self.cor_fundo_atual if self.estado != Estado.CONFIG else BRANCO)
 
@@ -297,23 +300,19 @@ class App:
                 if self.config_precisa_atualizar:
                     sexo_txt = self.config.get('sexo') or "—"; idade_txt = self.config.get('idade', 0)
                     texto_cfg = f"Configurações\nSexo: {sexo_txt}\nIdade: {idade_txt} anos"
-                    lines = texto_cfg.split('\n')
-                    rendered_lines = [self.fonte_texto.render(line, True, PRETO) for line in lines]
-                    total_height = sum(line.get_height() for line in rendered_lines)
-                    max_width = max(line.get_width() for line in rendered_lines)
+                    lines = texto_cfg.split('\n'); rendered_lines = [self.fonte_texto.render(line, True, PRETO) for line in lines]
+                    total_height = sum(line.get_height() for line in rendered_lines); max_width = max(line.get_width() for line in rendered_lines)
                     self.config_text_surface = pygame.Surface((max_width, total_height), pygame.SRCALPHA)
                     current_y = 0
-                    for line_surface in rendered_lines:
-                        self.config_text_surface.blit(line_surface, (0, current_y))
-                        current_y += line_surface.get_height()
-                    screen_rect = self.screen.get_rect()
-                    self.config_text_rect = self.config_text_surface.get_rect(center=(screen_rect.centerx, int(screen_rect.height * 0.2)))
+                    for line_surface in rendered_lines: self.config_text_surface.blit(line_surface, (0, current_y)); current_y += line_surface.get_height()
+                    screen_rect = self.screen.get_rect(); self.config_text_rect = self.config_text_surface.get_rect(center=(screen_rect.centerx, int(screen_rect.height * 0.2)))
                     self.config_precisa_atualizar = False
                 if self.config_text_surface: self.screen.blit(self.config_text_surface, self.config_text_rect)
                 if self.btn_group.buttons: self.btn_group.desenhar(self.screen, self.indice_selecionado)
             else:
-                self.texto.desenhar(text, self.cor_rosto_atual)
-                if self.btn_group.buttons and not self.falando_primeiro:
+                self.texto.desenhar(text,self.cor_rosto_atual)
+                # Alterado: Não desenha botões no estado de medição
+                if self.btn_group.buttons and not self.falando_primeiro and self.estado != Estado.BATIMENTO_MEDINDO:
                     self.btn_group.desenhar(self.screen, self.indice_selecionado)
         
         self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
@@ -323,29 +322,22 @@ class App:
         
         if self.falando_primeiro:
             if not self.falando:
-                # Alterado: Lógica para tocar a chave de áudio correta para o resultado
                 if self.estado == Estado.BATIMENTO_RESULTADO:
                     self.tts.speak(key=self.batimento_audio_key)
-                    self.falando = True
-                    self.ultimo_texto = self.batimento_audio_key
+                    self.falando = True; self.ultimo_texto = self.batimento_audio_key
                 elif key:
                     self.tts.speak(key=key)
-                    self.falando = True
-                    self.ultimo_texto = key
+                    self.falando = True; self.ultimo_texto = key
 
             if self.falando and not self.tts.speaking:
-                self.falando = False
-                self.falando_primeiro = False
-                self.btn_group.start_ms = pygame.time.get_ticks()
+                self.falando = False; self.falando_primeiro = False; self.btn_group.start_ms = pygame.time.get_ticks()
             elif not key and self.estado != Estado.BATIMENTO_RESULTADO:
-                self.falando_primeiro = False
-                self.btn_group.start_ms = pygame.time.get_ticks()
+                self.falando_primeiro = False; self.btn_group.start_ms = pygame.time.get_ticks()
         else:
             if key and key != self.ultimo_texto and self.estado != Estado.DORMINDO:
                 self.tts.speak(key=key)
-                self.falando = True
-                self.ultimo_texto = key
+                self.falando = True; self.ultimo_texto = key
             elif self.falando and not self.tts.speaking:
                 self.falando = False
-                
-        pygame.display.flip()
+        
+        # O pygame.display.flip() foi movido para o final do loop principal 'run'
