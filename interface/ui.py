@@ -16,7 +16,8 @@ class TextRenderer:
         self.top_ratio = top_ratio
         self.color = color
 
-    def desenhar(self, texto):
+    def desenhar(self, texto, surface=None):
+        target_surface = surface if surface is not None else self.screen
         max_width = self.screen.get_width() * self.max_width_ratio
         words, lines, line = texto.split(' '), [], ''
         for word in words:
@@ -44,6 +45,24 @@ class Botao:
         self.fonte = fonte
         self.cor_base, self.selected_color = cor_base, selected_color
         self.alpha = 0
+
+        # ** Inicializa o cache usado pelo set_text **
+        self.texto_anterior = None  
+        self.selecionado     = False
+        # opcional: prepare um espaço para a superfície que vai desenhar
+        self._surface_cache  = None  
+
+    def set_text(self, texto, selecionado=False):
+        # escrito para usar self.texto_anterior e self.selecionado
+        if texto != self.texto_anterior or selecionado != self.selecionado:
+            self.label = texto             # atualiza o label
+            self.texto_anterior = texto
+            self.selecionado     = selecionado
+            self._surface = None
+
+    def criar_superficie(self):
+        # exemplo simples: limpe o cache
+        self._surface_cache = None
 
     def atualiza_alpha(self, now, start_ms, index, delay_ms, dur_ms):
         t = now - (start_ms + index * delay_ms)
