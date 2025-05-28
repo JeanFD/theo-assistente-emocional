@@ -1,1 +1,5 @@
-{"sexo": "Masculino", "idade": 20}
+{
+    "sexo": "Masculino",
+    "idade": 20,
+    "voz": "robo"
+}
