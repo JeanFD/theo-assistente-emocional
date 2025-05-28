@@ -2,99 +2,83 @@ import serial
 import time
 from statistics import mean
 
-# Esta é a função que seu código irá importar e chamar.
-# Ela é bloqueante: executa pelo tempo determinado e só então retorna o valor.
+try:
+    from serial.serialutil import SerialException
+except ImportError:
+    SerialException = Exception
+
 def ler_batimentos(
     duracao_segundos: int,
-    porta_serial: str = '/dev/ttyUSB0',
-    # porta_serial: str = 'COM6',  # Use 'COM3' para Windows, '/dev/ttyACM0' para Linux
-    baud_rate: int = 9600
+    # porta_serial: str = '/dev/ttyUSB0',
+    porta_serial: str = 'COM8',
+    baud_rate: int = 9600,
+    simulacao: bool = False
 ) -> int:
     """
-    Conecta-se ao Arduino, mede os batimentos cardíacos por um período
-    determinado e retorna o BPM médio calculado. Esta função é bloqueante.
-
-    Args:
-        duracao_segundos (int): Por quantos segundos a medição deve ocorrer.
-        porta_serial (str): A porta serial onde o Arduino está conectado.
-        baud_rate (int): A taxa de bauds (deve ser a mesma do código Arduino).
-
-    Returns:
-        int: O valor do BPM (Batimentos Por Minuto) calculado. Retorna 0 se
-             não for possível medir.
+    Mede os batimentos cardíacos. O Arduino agora faz o pré-cálculo do BPM.
+    Esta função coleta os valores de BPM enviados pelo Arduino durante um
+    período e retorna a média deles.
     """
-    print(f"Função 'ler_batimentos' iniciada. Medindo por {duracao_segundos}s...")
+    # O modo de simulação continua funcionando como antes, sem alterações.
+    if simulacao:
+        print("\n--- MODO DE SIMULAÇÃO ATIVADO ---")
+        print(f"Gerando dados de batimentos por {duracao_segundos} segundos...")
+        bpm_simulado_alvo = 75
+        intervalo_entre_picos = 60.0 / bpm_simulado_alvo
+        peak_timestamps = []
+        start_time = time.time()
+        proximo_pico = start_time + intervalo_entre_picos
+        while time.time() - start_time < duracao_segundos:
+            if time.time() >= proximo_pico:
+                print(f"SIM: Pico de batimento simulado.")
+                peak_timestamps.append(time.time())
+                proximo_pico += intervalo_entre_picos
+            time.sleep(0.05)
+        print("--- FIM DA SIMULAÇÃO ---")
+        if not peak_timestamps: return 0 # Adicionado para evitar erro se não houver picos
+        # ... o resto da lógica de cálculo da simulação permanece igual
+        intervals = [peak_timestamps[i] - peak_timestamps[i - 1] for i in range(1, len(peak_timestamps))]
+        if not intervals: return 0
+        avg_interval = mean(intervals)
+        return int(60 / avg_interval)
 
-    # --- Configurações do Algoritmo de BPM ---
-    PEAK_THRESHOLD = 600
-    REFRACTORY_PERIOD = 0.3 # 300ms
+    else:
+        # --- NOVA LÓGICA PARA LER O BPM PRÉ-CALCULADO DO ARDUINO ---
+        print(f"\nFunção 'ler_batimentos' (MODO REAL). Lendo BPMs do Arduino por {duracao_segundos}s...")
+        
+        leituras_de_bpm = [] # Lista para armazenar os BPMs recebidos
 
-    # --- Variáveis de controle ---
-    peak_timestamps = []
-    last_peak_time = 0
-    last_value = 0
+        try:
+            with serial.Serial(porta_serial, baud_rate, timeout=1) as ser:
+                print(f"Conexão com Arduino estabelecida em {porta_serial}.")
+                ser.flushInput()
+                start_time = time.time()
 
-    try:
-        # 'with' garante que a porta serial será aberta e fechada corretamente
-        with serial.Serial(porta_serial, baud_rate, timeout=0.1) as ser:
-            print(f"Conexão com Arduino estabelecida em {porta_serial}.")
-            ser.flushInput() # Limpa qualquer lixo na entrada da serial
+                while time.time() - start_time < duracao_segundos:
+                    # Verifica se há dados na porta serial para ler
+                    if ser.in_waiting > 0:
+                        try:
+                            # Lê a linha enviada pelo Arduino (ex: "78.50")
+                            linha = ser.readline().decode('utf-8').strip()
+                            if linha:
+                                # Converte o texto para um número float
+                                bpm_recebido = float(linha)
+                                print(f"-> BPM recebido do Arduino: {bpm_recebido:.2f}")
+                                leituras_de_bpm.append(bpm_recebido)
+                        except (ValueError, UnicodeDecodeError):
+                            # Ignora linhas que não são números válidos, sem parar
+                            pass
+        except SerialException as e:
+            print(f"ERRO CRÍTICO: Não foi possível conectar ao Arduino em '{porta_serial}'. {e}")
+            return 0
 
-            start_time = time.time()
-            while time.time() - start_time < duracao_segundos:
-                try:
-                    linha = ser.readline().decode('utf-8').rstrip()
-                    if not linha:
-                        continue # Pula para a próxima iteração se a linha estiver vazia
-
-                    current_value = int(linha)
-                    current_time = time.time()
-
-                    # Lógica de detecção de pico (mesma de antes)
-                    is_peak = (
-                        last_value > PEAK_THRESHOLD and
-                        current_value < last_value and
-                        (current_time - last_peak_time) > REFRACTORY_PERIOD
-                    )
-
-                    if is_peak:
-                        peak_timestamps.append(current_time)
-                        last_peak_time = current_time
-
-                    last_value = current_value
-
-                except (ValueError, UnicodeDecodeError):
-                    # Ignora linhas malformadas sem parar a execução
-                    continue
-                except Exception as e:
-                    print(f"Erro inesperado durante a leitura: {e}")
-                    # Em um erro grave, podemos optar por parar
-                    break
-
-    except serial.SerialException as e:
-        print(f"ERRO CRÍTICO: Não foi possível conectar ao Arduino em '{porta_serial}'. {e}")
-        return 0 # Retorna 0 em caso de falha de conexão
-
-    # --- Cálculo Final do BPM ---
-    if len(peak_timestamps) < 2:
-        print("Medição concluída. Batimentos insuficientes para calcular o BPM.")
+    # --- CÁLCULO FINAL DA MÉDIA ---
+    if not leituras_de_bpm:
+        print("Medição concluída. Nenhum valor de BPM foi recebido do Arduino.")
         return 0
     else:
-        intervals = [peak_timestamps[i] - peak_timestamps[i-1] for i in range(1, len(peak_timestamps))]
-        avg_interval = mean(intervals)
-        bpm = int(60 / avg_interval)
-        print(f"Função 'ler_batimentos' concluída. BPM calculado: {bpm}")
-        return bpm
-
-
-# Bloco para teste direto do arquivo (não afeta a importação)
-if __name__ == "__main__":
-    print("--- Testando o módulo monitor_cardiaco.py diretamente ---")
-    # Simula a chamada que seu outro código faria
-    bpm_resultado = ler_batimentos(15, porta_serial='/dev/ttyACM0')
-
-    print("\n--- TESTE FINALIZADO ---")
-    if bpm_resultado > 0:
-        print(f"Resultado do teste: {bpm_resultado} BPM")
-    else:
-        print("Resultado do teste: Falha na medição.")
+        # Calcula a média de todas as leituras de BPM recebidas
+        bpm_medio = mean(leituras_de_bpm)
+        print(f"Medição concluída. A média de BPM do período foi: {bpm_medio:.2f}")
+        # Retorna o valor como um número inteiro
+        return int(bpm_medio)
