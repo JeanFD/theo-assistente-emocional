@@ -143,7 +143,7 @@ class App:
         self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
         self.registro = {"sentimento": None, "tipo": None, "escala": None, "bpm": None}
-        self.config = {"sexo": None, "idade": 0, "voz": "robo"}
+        self.config = {"sexo": None, "idade": 0, "voz": "masculino"}
 
         self.contador_tristes_consecutivas = 0
         self.limite_alerta_tristeza = 3
@@ -197,9 +197,9 @@ class App:
         self.respiracao_raio_max = self.altura * 0.05
         self.botoes_resp_animacao_iniciada = False
         self.respiracao_config = {
-            FaseRespiracao.INSPIRAR: {"duracao": 4.0, "cor": VERDE, "texto": "Inspire...", "rosto": "O o O", "audio_key": "respiracao_inspire"},
-            FaseRespiracao.SEGURAR:  {"duracao": 4.0, "cor": AMARELO, "texto": "Segure...", "rosto": "-- -- --", "audio_key": "respiracao_segure"},
-            FaseRespiracao.EXPIRAR:  {"duracao": 6.0, "cor": VERMELHO, "texto": "Expire lentamente...", "rosto": "-- o --", "audio_key": "respiracao_expire"}
+            FaseRespiracao.INSPIRAR: {"duracao": 3.0, "cor": VERDE, "texto": "Inspire...", "rosto": "O o O", "audio_key": "respiracao_inspire"},
+            FaseRespiracao.SEGURAR:  {"duracao": 1.5, "cor": AMARELO, "texto": "Segure...", "rosto": "-- -- --", "audio_key": "respiracao_segure"},
+            FaseRespiracao.EXPIRAR:  {"duracao": 3.0, "cor": VERMELHO, "texto": "Expire lentamente...", "rosto": "-- o --", "audio_key": "respiracao_expire"}
         }
 
         self.alerta_frases = [
@@ -402,7 +402,7 @@ class App:
         if self.estado == Estado.CONFIG:
             dados_mudaram = False
             if clicked == 0:
-                self.config['voz'] = 'caruzo' if self.config.get('voz', 'robo') == 'robo' else 'robo'
+                self.config['voz'] = 'feminino' if self.config.get('voz', 'masculino') == 'masculino' else 'masculino'
                 self.tts = TTS(voice_folder=self.config['voz'])
                 print(f"Voz alterada para: {self.config['voz']}")
                 self._criar_botoes_config()
