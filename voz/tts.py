@@ -5,7 +5,7 @@ import threading
 import os
 
 class TTS:
-    def __init__(self, voice_folder="robo", volume=1.0):
+    def __init__(self, voice_folder="masculino", volume=1.0):
         """
         Inicializa o sistema de Text-to-Speech.
         :param voice_folder: O nome da pasta da voz a ser usada (ex: 'robo', 'caruzo').
