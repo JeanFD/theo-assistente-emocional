@@ -6,8 +6,8 @@ from statistics import mean
 # Ela é bloqueante: executa pelo tempo determinado e só então retorna o valor.
 def ler_batimentos(
     duracao_segundos: int,
-    # porta_serial: str = '/dev/ttyUSB0',
-    porta_serial: str = 'COM6',  # Use 'COM3' para Windows, '/dev/ttyACM0' para Linux
+    porta_serial: str = '/dev/ttyUSB0',
+    # porta_serial: str = 'COM6',  # Use 'COM3' para Windows, '/dev/ttyACM0' para Linux
     baud_rate: int = 9600
 ) -> int:
     """

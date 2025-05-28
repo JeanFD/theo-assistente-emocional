@@ -2,7 +2,7 @@ import threading
 import requests
 
 # URL do seu endpoint
-SERVER_URL = 'https://seu-servidor.com/api/registro'
+SERVER_URL = 'https://seu-servidor.com/api/'
 
 
 def enviar_servidor(dados: dict) -> None:
