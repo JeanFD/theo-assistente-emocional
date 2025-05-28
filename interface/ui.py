@@ -2,7 +2,7 @@ import pygame
 
 BRANCO = (255, 255, 255)
 PRETO = (0, 0, 0)
-CINZA = (200, 200, 200)
+CINZA = (50, 175, 200)
 SELECIONADO = (50, 175, 200)
 
 FADE_T = 0.3
@@ -150,21 +150,21 @@ class BotaoConfiguracao:
         self.icone_char = "⚙"
 
         # Renderiza o texto para obter as dimensões
-        texto_surf = self.fonte.render(self.icone_char, True, PRETO)
+        texto_surf = self.fonte.render("Configurações", True, PRETO)
         
         # Torna o botão um pouco maior que o texto para facilitar o clique
-        padding = 20 
+        padding = 100
         btn_largura = texto_surf.get_width() + padding
         btn_altura = texto_surf.get_height() + padding
         
         # Posiciona o botão no canto superior direito
-        self.rect = pygame.Rect(largura - btn_largura - 10, 10, btn_largura, btn_altura)
+        self.rect = pygame.Rect(largura - btn_largura - 20, 20, btn_largura, btn_altura)
 
     def desenhar(self, screen):
         # Descomente a linha abaixo se quiser um fundo para o botão
         # pygame.draw.rect(screen, CINZA, self.rect, border_radius=10)
         
-        texto_surf = self.fonte.render(self.icone_char, True, PRETO)
+        texto_surf = self.fonte.render("Configurações", True, PRETO)
         texto_rect = texto_surf.get_rect(center=self.rect.center)
         screen.blit(texto_surf, texto_rect)
 
