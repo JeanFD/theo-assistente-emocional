@@ -253,7 +253,7 @@ class App:
 
     def _thread_medir_batimentos(self):
         print("Thread de medição iniciada.")
-        bpm = ler_batimentos(20)
+        bpm = ler_batimentos(10)
         self.medicao_queue.put(bpm)
         print(f"Thread de medição finalizada. BPM: {bpm}")
 

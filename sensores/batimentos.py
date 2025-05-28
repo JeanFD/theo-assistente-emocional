@@ -9,8 +9,8 @@ except ImportError:
 
 def ler_batimentos(
     duracao_segundos: int,
-    # porta_serial: str = '/dev/ttyUSB0',
-    porta_serial: str = 'COM8',
+    porta_serial: str = '/dev/ttyACM0',
+    # porta_serial: str = 'COM8',
     baud_rate: int = 9600,
     simulacao: bool = False
 ) -> int:
