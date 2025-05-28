@@ -96,7 +96,7 @@ AUDIO_KEYS = {
 STATE_CONFIG = {
     Estado.INICIO: ("Olá! O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
     Estado.SELECIONAR_SENTIMENTO: ("Como você está se sentindo?", ["Feliz", "Irritado", "Triste", "Ansioso"]),
-    Estado.TIPO_SENTIMENTO: ("Esse sentimento é ligado a algo bom ou ruim?", ["Positivo", "Negativo", "Não sei"]),
+    Estado.TIPO_SENTIMENTO: ("Esse sentimento é ligado a algo bom ou ruim?", ["Positivo", "Negativo", "Não Sei"]),
     Estado.ESCALA: ("Em uma escala de 1 a 5, qual a intensidade desse sentimento?", [str(i) for i in range(1, 6)]),
     Estado.OBRIGADO: ("Obrigado! Registro concluído.", []), 
     Estado.BATIMENTO_INSTRUCAO: ("Por favor, coloque o dedo no sensor para conferir seu batimento.", ["Iniciar Medição"]),
@@ -116,7 +116,7 @@ class App:
     def __init__(self):
         pygame.mixer.pre_init(44100, -16, 2, 2048)
         pygame.init()
-        
+        # pygame.mouse.set_visible(False)
         info = pygame.display.Info()
         self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
