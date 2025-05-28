@@ -13,7 +13,6 @@ def enviar_dados_sentimento(dados_sentimento: dict) -> None:
     """
     def _task():
         payload = {
-            "usuario_id": 1,
             "sentimento": dados_sentimento.get("sentimento"),
             "tipo": dados_sentimento.get("tipo"),
             "escala": dados_sentimento.get("escala"),
@@ -21,9 +20,7 @@ def enviar_dados_sentimento(dados_sentimento: dict) -> None:
         }
         try:
             # Assumindo que sua API espera um POST para criar um novo registro
-            print(payload)
             response = requests.post(URL_REGISTRO_SENTIMENTO, json=payload, timeout=5)
-            print(response)
             response.raise_for_status()
             print(f"[API] Sentimento enviado: {response.status_code}, {response.json()}")
         except requests.RequestException as e:
@@ -34,22 +31,17 @@ def enviar_dados_sentimento(dados_sentimento: dict) -> None:
 
 # --- Função para BPM ---
 def enviar_dados_bpm(dados_bpm: dict) -> None:
-
     """
     Envia os dados de BPM para o servidor.
     """
     def _task():
         payload = {
-            "usuario_id": 1,
             "bpm": dados_bpm.get("bpm"),
             # "usuario_id": ID_DO_USUARIO_LOGADO # Adicionar ID do usuário
         }
         try:
-            print(payload)
-
             response = requests.post(URL_REGISTRO_BPM, json=payload, timeout=5)
             response.raise_for_status()
-            
             print(f"[API] BPM enviado: {response.status_code}, {response.json()}")
         except requests.RequestException as e:
             print(f"[API] Erro ao enviar BPM: {e}")
@@ -65,7 +57,6 @@ def enviar_dados_perfil(dados_perfil: dict, usuario_id=None) -> None: # Adiciona
     """
     def _task():
         payload = {
-            "usuario_id": 1,
             "sexo": dados_perfil.get("sexo"),
             "idade": dados_perfil.get("idade"),
             # "voz": dados_perfil.get("voz") # Se sua API de perfil também aceitar isso
@@ -94,7 +85,7 @@ def enviar_dados_perfil(dados_perfil: dict, usuario_id=None) -> None: # Adiciona
             # dependendo da sua implementação no Django.
             
             # Vamos simular um PUT, assumindo que o backend identifica o usuário pela sessão/token
-            response = requests.patch(URL_PERFIL, json=payload, timeout=5) # Ou POST/PATCH
+            response = requests.put(URL_PERFIL, json=payload, timeout=5) # Ou POST/PATCH
             response.raise_for_status()
             print(f"[API] Perfil atualizado: {response.status_code}, {response.json()}")
         except requests.RequestException as e:
