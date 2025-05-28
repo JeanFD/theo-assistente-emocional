@@ -94,7 +94,7 @@ def enviar_dados_perfil(dados_perfil: dict, usuario_id=None) -> None: # Adiciona
             # dependendo da sua implementação no Django.
             
             # Vamos simular um PUT, assumindo que o backend identifica o usuário pela sessão/token
-            response = requests.patch(URL_PERFIL, json=payload, timeout=5) # Ou POST/PATCH
+            response = requests.post(URL_PERFIL, json=payload, timeout=5) # Ou POST/PATCH
             response.raise_for_status()
             print(f"[API] Perfil atualizado: {response.status_code}, {response.json()}")
         except requests.RequestException as e:
