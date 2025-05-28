@@ -22,6 +22,13 @@ class RegistroSentimento(models.Model):
     escala = models.IntegerField()
     data_criacao = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        if self.escala < 1:
+            self.escala = 1
+        elif self.escala > 5:
+            self.escala = 5
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.usuario.username if self.usuario else 'Anônimo'} - {self.sentimento} - {self.tipo} - {self.escala}"
 
