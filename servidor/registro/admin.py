@@ -1,15 +1,16 @@
 from django.contrib import admin
-from .models import Registro, Usuario
+from .models import RegistroSentimento, RegistroBPM
 
-@admin.register(Usuario)
-class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'sexo', 'idade')
-    search_fields = ('nome',)
-
-@admin.register(Registro)
-class RegistroAdmin(admin.ModelAdmin):
-    list_display = ('usuario', 'sentimento', 'tipo', 'escala', 'bpm', 'data_criacao')
+@admin.register(RegistroSentimento)
+class RegistroSentimentoAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'sentimento', 'tipo', 'escala', 'data_criacao')
     list_filter = ('sentimento', 'tipo', 'usuario', 'data_criacao')
-    search_fields = ('sentimento', 'tipo', 'usuario__nome')
+    search_fields = ('sentimento', 'tipo', 'usuario__username')
+
+@admin.register(RegistroBPM)
+class RegistroBPMAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'bpm', 'data_criacao')
+    list_filter = ('usuario', 'data_criacao')
+    search_fields = ('usuario__username',)
 
 # Se houver outros modelos, registre-os aqui também.

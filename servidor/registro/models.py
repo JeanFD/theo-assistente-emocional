@@ -1,16 +1,8 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 
-class Usuario(models.Model):
-    nome = models.CharField(max_length=100, unique=True)
-    sexo = models.CharField(max_length=20, blank=True, null=True)
-    idade = models.IntegerField(blank=True, null=True)
-
-    def __str__(self):
-        return self.nome
-
-
-class Registro(models.Model):
+class RegistroSentimento(models.Model):
     SENTIMENTO_CHOICES = [
         ('Feliz', 'Feliz'),
         ('Irritado', 'Irritado'),
@@ -24,12 +16,20 @@ class Registro(models.Model):
         ('Não sei', 'Não sei'),
     ]
 
-    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='registros')
-    sentimento = models.CharField(max_length=20, choices=SENTIMENTO_CHOICES, blank=True, null=True)
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, blank=True, null=True)
-    escala = models.IntegerField(blank=True, null=True)
-    bpm = models.IntegerField(blank=True, null=True)
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_sentimento', blank=True, null=True)
+    sentimento = models.CharField(max_length=20, choices=SENTIMENTO_CHOICES)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    escala = models.IntegerField()
     data_criacao = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.usuario.nome} - {self.sentimento} - {self.tipo} - {self.escala}"
+        return f"{self.usuario.username if self.usuario else 'Anônimo'} - {self.sentimento} - {self.tipo} - {self.escala}"
+
+
+class RegistroBPM(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_bpm', blank=True, null=True)
+    bpm = models.IntegerField()
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.usuario.username if self.usuario else 'Anônimo'} - {self.bpm} bpm"

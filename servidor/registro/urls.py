@@ -1,9 +1,9 @@
 from django.urls import path
-from .views import RegistroCreateAPIView, UsuarioUpdateAPIView
+from .views import RegistroSentimentoCreateListAPIView, RegistroBPMCreateListAPIView
 from . import views
 
 urlpatterns = [
-    path('registro/', RegistroCreateAPIView.as_view(), name='registro-create'),
-    path('usuario/', UsuarioUpdateAPIView.as_view(), name='usuario-update'),
+    path('registro-sentimento/', RegistroSentimentoCreateListAPIView.as_view(), name='registro-sentimento'),
+    path('registro-bpm/', RegistroBPMCreateListAPIView.as_view(), name='registro-bpm'),
     path('', views.listar_registros, name='listar_registros'),
 ]
