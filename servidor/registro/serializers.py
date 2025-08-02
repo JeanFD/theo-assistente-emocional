@@ -1,7 +1,22 @@
 from rest_framework import serializers
-from .models import Registro
+from django.contrib.auth.models import User
+from .models import RegistroSentimento, RegistroBPM
 
-class RegistroSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Registro
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'email']
+
+class RegistroSentimentoSerializer(serializers.ModelSerializer):
+    usuario = UserSerializer(read_only=True)
+
+    class Meta:
+        model = RegistroSentimento
+        fields = '__all__'
+
+class RegistroBPMSerializer(serializers.ModelSerializer):
+    usuario = UserSerializer(read_only=True)
+
+    class Meta:
+        model = RegistroBPM
         fields = '__all__'
