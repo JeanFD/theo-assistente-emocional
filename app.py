@@ -254,6 +254,7 @@ class App:
         elif self.estado == Estado.ESCALA:
             self.registro['escala'] = STATE_CONFIG[self.estado][1][clicked]
             print(self.registro)
+            print('\n')
             enviar_servidor(self.registro)
             self.estado = Estado.OBRIGADO
             self.tempo_obrigado = self.tempo

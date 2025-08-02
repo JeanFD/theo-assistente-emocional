@@ -9,16 +9,14 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegistroSentimentoSerializer(serializers.ModelSerializer):
     usuario = UserSerializer(read_only=True)
-    usuario_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='usuario', write_only=True)
 
     class Meta:
         model = RegistroSentimento
-        fields = ['id', 'usuario', 'usuario_id', 'sentimento', 'tipo', 'escala', 'data_criacao']
+        fields = '__all__'
 
 class RegistroBPMSerializer(serializers.ModelSerializer):
     usuario = UserSerializer(read_only=True)
-    usuario_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='usuario', write_only=True)
 
     class Meta:
         model = RegistroBPM
-        fields = ['id', 'usuario', 'usuario_id', 'bpm', 'data_criacao']
+        fields = '__all__'

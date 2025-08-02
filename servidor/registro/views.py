@@ -3,71 +3,60 @@ from .models import RegistroSentimento, RegistroBPM
 from .serializers import RegistroSentimentoSerializer, RegistroBPMSerializer
 from django.shortcuts import render, redirect
 from django.contrib.auth.models import User
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import authenticate, login, logout
-from django.views.decorators.csrf import csrf_protect
+from rest_framework.permissions import AllowAny
+from django.contrib.auth import logout
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegistroSentimentoCreateListAPIView(generics.ListCreateAPIView):
     queryset = RegistroSentimento.objects.all()
     serializer_class = RegistroSentimentoSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return RegistroSentimento.objects.filter(usuario=user)
-        anon = User.objects.filter(username='Anônimo').first()
-        if anon:
-            return RegistroSentimento.objects.filter(usuario=anon)
-        return RegistroSentimento.objects.none()
+        return RegistroSentimento.objects.all()
 
     def perform_create(self, serializer):
-        user = self.request.user if self.request.user.is_authenticated else User.objects.get(username='Anônimo')
-        serializer.save(usuario=user)
+        # Cria um novo dict apenas com os campos relevantes para RegistroSentimento
+        data = serializer.validated_data
+        novo_json = {
+            'sentimento': data.get('sentimento'),
+            'tipo': data.get('tipo'),
+            'escala': data.get('escala'),
+        }
+        serializer.save(**novo_json)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegistroBPMCreateListAPIView(generics.ListCreateAPIView):
     queryset = RegistroBPM.objects.all()
     serializer_class = RegistroBPMSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return RegistroBPM.objects.filter(usuario=user)
-        anon = User.objects.filter(username='Anônimo').first()
-        if anon:
-            return RegistroBPM.objects.filter(usuario=anon)
-        return RegistroBPM.objects.none()
+        return RegistroBPM.objects.all()
 
     def perform_create(self, serializer):
-        user = self.request.user if self.request.user.is_authenticated else User.objects.get(username='Anônimo')
-        serializer.save(usuario=user)
+        # Cria um novo dict apenas com os campos relevantes para RegistroBPM
+        data = serializer.validated_data
+        novo_json = {
+            'bpm': data.get('bpm'),
+        }
+        serializer.save(**novo_json)
 
 def listar_registros(request):
-    user = request.user
-    if user.is_authenticated and user.username != 'Teste':
-        registros_sentimento = RegistroSentimento.objects.filter(usuario=user)
-        registros_bpm = RegistroBPM.objects.filter(usuario=user)
-        nome = user.username
-        sexo = getattr(user, 'sexo', '-')
-        idade = getattr(user, 'idade', '-')
-    else:
-        registros_sentimento = RegistroSentimento.objects.filter(usuario__isnull=True)
-        registros_bpm = RegistroBPM.objects.filter(usuario__isnull=True)
-        nome = 'Teste'
-        sexo = '-'
-        idade = '-'
+    registros_sentimento = RegistroSentimento.objects.all()
+    registros_bpm = RegistroBPM.objects.all()
+    nome = '-'
+    sexo = '-'
+    idade = '-'
     return render(request, 'registros.html', {
         'registros_sentimento': registros_sentimento,
         'registros_bpm': registros_bpm,
         'nome': nome,
         'sexo': sexo,
         'idade': idade,
-        'user': user
+        'user': request.user
     })
 
 def logout_view(request):

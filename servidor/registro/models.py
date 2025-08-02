@@ -8,6 +8,7 @@ class RegistroSentimento(models.Model):
         ('Irritado', 'Irritado'),
         ('Triste', 'Triste'),
         ('Ansioso', 'Ansioso'),
+        ('Neutro', 'Neutro'),
     ]
 
     TIPO_CHOICES = [
@@ -18,7 +19,7 @@ class RegistroSentimento(models.Model):
 
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_sentimento', blank=True, null=True)
     sentimento = models.CharField(max_length=20, choices=SENTIMENTO_CHOICES)
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, blank=True, null=True)
     escala = models.IntegerField()
     data_criacao = models.DateTimeField(auto_now_add=True)
 
