@@ -43,10 +43,14 @@ class ParametrosRosto:
     folha_rot: float = 0.0
     olho_esq_sx: float = 1.0
     olho_esq_sy: float = 1.0
+    olho_esq_dx: float = 0.0
     olho_esq_dy: float = 0.0
+    olho_esq_rot: float = 0.0
     olho_dir_sx: float = 1.0
     olho_dir_sy: float = 1.0
+    olho_dir_dx: float = 0.0
     olho_dir_dy: float = 0.0
+    olho_dir_rot: float = 0.0
     boca_sx: float = 1.0
     boca_sy: float = 1.0
     boca_dy: float = 0.0
@@ -85,10 +89,12 @@ EXPRESSOES = {
         folha_rot=-8,
     ),
     "dormindo": ParametrosRosto(
-        olho_esq_sy=0.04, olho_dir_sy=0.04,
-        olho_esq_dy=0.02, olho_dir_dy=0.02,
-        boca_sx=0.42, boca_sy=0.42,
-        folha_rot=-25,
+        olho_esq_sx=1.35, olho_esq_sy=0.22, olho_esq_rot=-12,
+        olho_dir_sx=1.35, olho_dir_sy=0.22, olho_dir_rot=12,
+        olho_esq_dx=0.025, olho_dir_dx=-0.025,
+        olho_esq_dy=0.01, olho_dir_dy=0.01,
+        boca_sx=0.7, boca_sy=0.5,
+        folha_rot=-22,
     ),
 }
 
@@ -313,18 +319,18 @@ class Face:
         # Olho esquerdo (magenta)
         self._blit(
             self.spr_olho_esq, self.w_olho_esq, self.h_olho,
-            self.pos_olho_esq[0] + flutua_x + olho_esq_dx,
+            self.pos_olho_esq[0] + flutua_x + olho_esq_dx + p.olho_esq_dx * self.tela_w,
             self.pos_olho_esq[1] + flutua_y + olho_esq_dy_drift + p.olho_esq_dy * self.tela_h,
             p.olho_esq_sx, p.olho_esq_sy * pisca_factor * olho_breath,
-            0,
+            p.olho_esq_rot,
         )
         # Olho direito (amarelo)
         self._blit(
             self.spr_olho_dir, self.w_olho_dir, self.h_olho,
-            self.pos_olho_dir[0] + flutua_x + olho_dir_dx,
+            self.pos_olho_dir[0] + flutua_x + olho_dir_dx + p.olho_dir_dx * self.tela_w,
             self.pos_olho_dir[1] + flutua_y + olho_dir_dy_drift + p.olho_dir_dy * self.tela_h,
             p.olho_dir_sx, p.olho_dir_sy * pisca_factor * olho_breath,
-            0,
+            p.olho_dir_rot,
         )
         # Boca (azul)
         self._blit(

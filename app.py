@@ -1,6 +1,6 @@
 import pygame, sys
 from enum import Enum, auto
-from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
+from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade, fonte
 from interface.face import Face
 from interface.transicao import Transicao
 from interface.tema import (
@@ -90,8 +90,8 @@ class App:
         pygame.mouse.set_visible(False)
 
         largura, altura = self.screen.get_size()
-        self.fonte_texto = pygame.font.SysFont("Arial", int(altura * 0.07), bold=True)
-        self.fonte_botao = "Arial"
+        self.fonte_texto = fonte(int(altura * 0.075), bold=True)
+        self.fonte_botao = None  # nao usado mais, fontes vem do tema
 
         self.face = Face(self.screen)
 

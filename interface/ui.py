@@ -1,13 +1,50 @@
-"""Componentes de UI: texto e botoes do THEO."""
+"""Componentes de UI: texto e botoes do THEO.
 
+Design system:
+  - Fonte personalizada (JandaManateeSolid) com fallback profissional
+  - Botoes arredondados com sombra suave (profundidade)
+  - Borda de destaque grossa quando selecionado por teclado
+  - Cache de fontes por tamanho (evita recriar a cada frame)
+"""
+
+import os
 import pygame
 from interface.tema import (
-    BRANCO, PRETO, AZUL_MARINHO,
-    BOTAO_PADRAO, BOTAO_SELECIONADO_TECLADO, BOTAO_TEXTO,
+    BRANCO, AZUL_MARINHO, BOTAO_PADRAO, BOTAO_SELECIONADO_TECLADO, BOTAO_TEXTO,
+    SOMBRA_BOTAO, RAIO_BOTAO, OFFSET_SOMBRA, BORDA_DESTAQUE,
+    FONTE_CUSTOM_PATH, FONTE_FALLBACKS,
 )
 
 
-def _wrap_lines(fonte, texto, max_width):
+_FONT_CACHE = {}
+
+
+def fonte(tamanho, bold=True):
+    """Carrega fonte custom se existir, senao usa fallback. Cacheia por tamanho."""
+    key = (tamanho, bold)
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+    if os.path.exists(FONTE_CUSTOM_PATH):
+        try:
+            f = pygame.font.Font(FONTE_CUSTOM_PATH, tamanho)
+            _FONT_CACHE[key] = f
+            return f
+        except Exception:
+            pass
+    # Fallback: tenta cada nome ate funcionar
+    for nome in FONTE_FALLBACKS:
+        try:
+            f = pygame.font.SysFont(nome, tamanho, bold=bold)
+            _FONT_CACHE[key] = f
+            return f
+        except Exception:
+            continue
+    f = pygame.font.Font(None, tamanho)
+    _FONT_CACHE[key] = f
+    return f
+
+
+def _wrap_lines(fonte_obj, texto, max_width):
     """Quebra texto em linhas respeitando \\n e largura maxima."""
     linhas = []
     for paragrafo in texto.split('\n'):
@@ -16,7 +53,7 @@ def _wrap_lines(fonte, texto, max_width):
         while words:
             word = words.pop(0)
             test_line = f"{line} {word}".strip()
-            if fonte.size(test_line)[0] <= max_width:
+            if fonte_obj.size(test_line)[0] <= max_width:
                 line = test_line
             else:
                 linhas.append(line)
@@ -25,36 +62,35 @@ def _wrap_lines(fonte, texto, max_width):
     return linhas
 
 
-def desenhar_frase(screen, fonte, texto, cor=AZUL_MARINHO, top_ratio=0.18, max_width_ratio=0.85):
-    """Desenha texto centralizado no topo com word-wrap."""
+def desenhar_frase(screen, fonte_obj, texto, cor=AZUL_MARINHO, top_ratio=0.13, max_width_ratio=0.86):
+    """Desenha texto centralizado no topo com word-wrap e espacamento adequado."""
     if not texto:
         return
     max_width = screen.get_width() * max_width_ratio
-    linhas = _wrap_lines(fonte, texto, max_width)
-    line_h = fonte.get_linesize()
+    linhas = _wrap_lines(fonte_obj, texto, max_width)
+    line_h = int(fonte_obj.get_linesize() * 1.08)
     total_h = line_h * len(linhas)
     y = screen.get_height() * top_ratio - total_h / 2
     for i, l in enumerate(linhas):
-        surf = fonte.render(l, True, cor)
+        surf = fonte_obj.render(l, True, cor)
         rect = surf.get_rect(center=(screen.get_width() // 2, y + i * line_h + line_h / 2))
         screen.blit(surf, rect)
 
 
 def criar_botoes(screen_width, screen_height, rotulos):
     """Cria layout dos botoes na parte inferior da tela."""
-    if rotulos is None or len(rotulos) == 0:
+    if not rotulos:
         return []
-    margem = screen_width * 0.08
-    espaco = screen_width * 0.025
-    altura_botao = screen_height * 0.16
-    largura_botao = (screen_width - (2 * margem) - (len(rotulos) - 1) * espaco) / len(rotulos)
-    y = screen_height * 0.78
+    margem = screen_width * 0.09
+    espaco = screen_width * 0.022
+    altura_botao = screen_height * 0.14
+    largura_botao = (screen_width - 2 * margem - (len(rotulos) - 1) * espaco) / len(rotulos)
+    y = screen_height * 0.80
     x0 = (screen_width - (len(rotulos) * largura_botao + (len(rotulos) - 1) * espaco)) / 2
-    botoes = []
-    for i, rtl in enumerate(rotulos):
-        botao = pygame.Rect(int(x0 + i * (largura_botao + espaco)), int(y), int(largura_botao), int(altura_botao))
-        botoes.append((botao, rtl))
-    return botoes
+    return [
+        (pygame.Rect(int(x0 + i * (largura_botao + espaco)), int(y), int(largura_botao), int(altura_botao)), rtl)
+        for i, rtl in enumerate(rotulos)
+    ]
 
 
 def _calc_alpha(now, start_ms, index, delay_ms, dur_ms):
@@ -66,47 +102,63 @@ def _calc_alpha(now, start_ms, index, delay_ms, dur_ms):
     return int(255 * (t / dur_ms))
 
 
-def _desenhar_botao(screen, rect, label, fonte_nome, cor_fundo, alpha, selecionado_destaque):
-    """Desenha um botao arredondado com texto centralizado."""
-    surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-    raio = int(min(rect.width, rect.height) * 0.35)
-    cor = (*cor_fundo, alpha)
-    pygame.draw.rect(surf, cor, surf.get_rect(), border_radius=raio)
+def _texto_que_cabe(label, max_w, max_h):
+    """Encontra o maior tamanho de fonte que faz o texto caber no espaco."""
+    fs = int(max_h * 0.46)
+    while fs > 12:
+        f = fonte(fs, bold=True)
+        size = f.size(label)
+        if size[0] <= max_w and size[1] <= max_h * 0.85:
+            return f, size
+        fs -= 2
+    return fonte(12, bold=True), fonte(12, bold=True).size(label)
 
-    # Borda de destaque para selecao por teclado
+
+def _desenhar_botao(screen, rect, label, cor_fundo, alpha, selecionado_destaque):
+    """Botao com sombra suave, cantos arredondados e texto centralizado."""
+    raio = int(min(rect.width, rect.height) * RAIO_BOTAO)
+
+    # Sombra (alphablend separado pois tem alpha proprio)
+    sombra_alpha = (SOMBRA_BOTAO[3] * alpha) // 255
+    if sombra_alpha > 0:
+        sombra_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(
+            sombra_surf,
+            (SOMBRA_BOTAO[0], SOMBRA_BOTAO[1], SOMBRA_BOTAO[2], sombra_alpha),
+            sombra_surf.get_rect(),
+            border_radius=raio,
+        )
+        screen.blit(sombra_surf, (rect.left, rect.top + OFFSET_SOMBRA))
+
+    # Corpo do botao
+    corpo = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.rect(corpo, (*cor_fundo, alpha), corpo.get_rect(), border_radius=raio)
+
+    # Borda de destaque (teclado)
     if selecionado_destaque:
-        borda_cor = (*BOTAO_SELECIONADO_TECLADO, alpha)
-        pygame.draw.rect(surf, borda_cor, surf.get_rect(), width=max(4, rect.height // 16), border_radius=raio)
+        pygame.draw.rect(
+            corpo,
+            (*BOTAO_SELECIONADO_TECLADO, alpha),
+            corpo.get_rect(),
+            width=BORDA_DESTAQUE,
+            border_radius=raio,
+        )
 
     # Texto
-    fs = int(rect.height * 0.42)
-    font = pygame.font.SysFont(fonte_nome, fs, bold=True)
-    txt = font.render(label, True, BOTAO_TEXTO)
-    while txt.get_width() > rect.width * 0.85 and fs > 10:
-        fs -= 2
-        font = pygame.font.SysFont(fonte_nome, fs, bold=True)
-        txt = font.render(label, True, BOTAO_TEXTO)
+    f, (tw, th) = _texto_que_cabe(label, rect.width * 0.86, rect.height)
+    txt = f.render(label, True, BOTAO_TEXTO)
     txt.set_alpha(alpha)
-    x = (rect.width - txt.get_width()) // 2
-    y = (rect.height - txt.get_height()) // 2
-    surf.blit(txt, (x, y))
+    corpo.blit(txt, ((rect.width - tw) // 2, (rect.height - th) // 2))
 
-    screen.blit(surf, rect.topleft)
+    screen.blit(corpo, rect.topleft)
 
 
 def desenhar_botoes_fade(screen, botoes, fonte_nome, selecionado, fade_start_ms, fade_t_ms, delay_ms,
                          teclado_ativo=False, cores_por_botao=None):
-    """Desenha botoes com fade-in escalonado.
-
-    cores_por_botao: opcional, lista de cores RGB. Se fornecido, cada botao usa sua cor.
-    Caso contrario, todos usam BOTAO_PADRAO (azul).
-    """
+    """Desenha botoes com fade-in escalonado e cores configuraveis por botao."""
     now = pygame.time.get_ticks()
     for i, (rect, label) in enumerate(botoes):
-        if cores_por_botao and i < len(cores_por_botao):
-            cor = cores_por_botao[i]
-        else:
-            cor = BOTAO_PADRAO
+        cor = cores_por_botao[i] if (cores_por_botao and i < len(cores_por_botao)) else BOTAO_PADRAO
         alpha = _calc_alpha(now, fade_start_ms, i, delay_ms, fade_t_ms)
         destaque = teclado_ativo and i == selecionado
-        _desenhar_botao(screen, rect, label, fonte_nome, cor, alpha, destaque)
+        _desenhar_botao(screen, rect, label, cor, alpha, destaque)
