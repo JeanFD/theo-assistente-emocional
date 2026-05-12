@@ -51,8 +51,8 @@ class ParametrosRosto:
     olho_dir_dx: float = 0.0
     olho_dir_dy: float = 0.0
     olho_dir_rot: float = 0.0
-    boca_sx: float = 1.0
-    boca_sy: float = 1.0
+    boca_sx: float = 0.8
+    boca_sy: float = 0.8
     boca_dy: float = 0.0
     boca_rot: float = 0.0
 
@@ -60,7 +60,7 @@ class ParametrosRosto:
 EXPRESSOES = {
     "feliz": ParametrosRosto(
         folha_rot=-5,
-        boca_sx=1.05, boca_sy=1.05,
+        boca_sx=0.9, boca_sy=0.9,
     ),
     "neutro": ParametrosRosto(
         boca_sx=0.78, boca_sy=0.72,
@@ -272,7 +272,7 @@ class Face:
         # Cada um tem frequencia/fase distinta — sensacao organica, vivo
         amp_drift = self.tela_h * 0.006  # amplitude pequena, sutil
         if dormindo:
-            amp_drift *= 0.3  # quase parado dormindo
+            amp_drift *= 0.5  # quase parado dormindo
 
         folha_dx = math.sin(tempo * 1.6 + 0.0) * amp_drift * 0.6
         folha_dy_drift = math.cos(tempo * 1.2 + 0.0) * amp_drift * 0.4
@@ -299,9 +299,10 @@ class Face:
 
         # === PISCAR e FALAR ===
         pisca_factor = 1 - 0.94 * self._piscando_intensidade
-        fala_factor = 1 + 0.35 * self._falando_offset
-        # Falando: boca tambem desloca um pouquinho pra cima na pulsacao
-        fala_dy = -self._falando_offset * self.tela_h * 0.004
+        # Falando: boca encolhe (efeito de "fechando para articular silaba"),
+        # mais natural que crescer
+        fala_factor = 1 - 0.55 * self._falando_offset
+        fala_dy = self._falando_offset * self.tela_h * 0.003
 
         # === DESENHO ===
         # Folha
