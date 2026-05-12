@@ -1,10 +1,10 @@
 """Paleta e tokens visuais do THEO."""
 
-# Paleta principal (extraida da logo)
-VERDE = (31, 181, 74)
-MAGENTA = (236, 0, 140)
-AMARELO = (247, 164, 28)
-AZUL = (0, 181, 226)
+# Paleta principal (extraida pixel-a-pixel da logo theo_pequeno1.png)
+VERDE = (35, 173, 0)
+MAGENTA = (232, 54, 198)
+AMARELO = (255, 183, 8)
+AZUL = (0, 160, 225)
 AZUL_MARINHO = (15, 36, 56)
 
 # Neutros
