@@ -4,6 +4,7 @@ BRANCO = (255, 255, 255)
 PRETO = (0, 0, 0)
 CINZA = (200, 200, 200)
 SELECIONADO = (50, 175, 200)
+DESTAQUE_TECLADO = (20, 110, 150)
 
 FADE_T = 0.3
 DELAY_BTWN = 0.2
@@ -110,6 +111,19 @@ def criar_botoes(screen_width, screen_height, rotulos):
         botao = pygame.Rect(x0 + i * (largura_botao + espaco), y, largura_botao, altura_botao)
         botoes.append((botao, rtl))
     return botoes
+
+
+def desenhar_frase(screen, fonte, texto):
+    renderer = TextRenderer(screen, fonte)
+    renderer.desenhar(texto)
+
+
+def desenhar_botoes_fade(screen, botoes, fonte_nome, selecionado, fade_start_ms, fade_t_ms, delay_ms, teclado_ativo=False):
+    now = pygame.time.get_ticks()
+    for i, (rect, label) in enumerate(botoes):
+        btn = Botao(rect, label, fonte_nome, SELECIONADO, DESTAQUE_TECLADO)
+        btn.atualiza_alpha(now, fade_start_ms, i, delay_ms, fade_t_ms)
+        btn.desenhar(screen, fonte_nome, teclado_ativo and i == selecionado, btn.alpha)
 
 class GrupoBotoes:
     def __init__(self, screen_width, screen_height, labels, font_name, base_color=CINZA, select_color=SELECIONADO, fade_duration=FADE_T*1000, fade_delay=DELAY_BTWN*1000):
