@@ -28,8 +28,8 @@ LOGO_PATH = os.path.join(
 # No logo original os blobs estao em 2x2 apontando para o centro. Aqui
 # rotacionamos para a orientacao correta de um rosto em pe'.
 BASE_ROT_FOLHA = -30      # folha aponta para cima
-BASE_ROT_OLHO_ESQ = 135   # magenta horizontal com fenda para dentro
-BASE_ROT_OLHO_DIR = -135  # amarelo espelhado, fenda para dentro
+BASE_ROT_OLHO_ESQ = -45   # magenta horizontal, lado correto pra cima
+BASE_ROT_OLHO_DIR = 45    # amarelo espelhado, lado correto pra cima
 BASE_ROT_BOCA = -45       # boca como sorriso horizontal
 # Espelha olho direito para virar mirror do esquerdo
 FLIP_OLHO_DIR = True
@@ -98,11 +98,12 @@ def _lerp(a, b, t):
 
 
 def _converter_fundo_para_alpha(img):
-    """Converte o fundo preto em transparencia real (com gradiente nas bordas).
+    """Converte fundo preto em transparencia real e des-premultiplica cor.
 
-    Para cada pixel, alpha = max(R,G,B). Pixels pretos viram totalmente
-    transparentes, pixels coloridos opacos, e bordas anti-aliased ganham
-    alpha intermediario — eliminando o halo/serrilhado.
+    Para cada pixel, calcula brilho = max(R,G,B). Pixels com pouco brilho
+    sao tratados como anti-aliasing entre cor verdadeira e fundo preto.
+    O alpha sai do brilho e o RGB e' amplificado para "des-premultiplicar"
+    a cor de volta. Isso elimina completamente o halo preto nas bordas.
     """
     img = img.convert_alpha()
     w, h = img.get_size()
@@ -114,15 +115,24 @@ def _converter_fundo_para_alpha(img):
         r = ba[i]
         g = ba[i + 1]
         b = ba[i + 2]
-        brilho = r if r > g else g
-        if b > brilho:
-            brilho = b
-        if brilho < 16:
+        brilho = max(r, g, b)
+        if brilho < 6:
+            # Pixel preto = fundo, totalmente transparente
             ba[i + 3] = 0
-        elif brilho > 96:
+            ba[i] = 0
+            ba[i + 1] = 0
+            ba[i + 2] = 0
+        elif brilho >= 250:
+            # Cor totalmente saturada, opaco
             ba[i + 3] = 255
         else:
-            ba[i + 3] = int((brilho - 16) * 255 / 80)
+            # Borda anti-aliased: alpha do brilho, cor des-premultiplicada
+            alpha = brilho
+            ba[i + 3] = alpha
+            factor = 255.0 / alpha
+            ba[i] = min(255, int(r * factor))
+            ba[i + 1] = min(255, int(g * factor))
+            ba[i + 2] = min(255, int(b * factor))
         i += 4
     return pygame.image.fromstring(bytes(ba), (w, h), "RGBA")
 
