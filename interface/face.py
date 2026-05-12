@@ -45,10 +45,12 @@ class Face:
         self.rosto_atual = ROSTO_BASE[estado]
 
     def desenhar(self, tempo: float):
-        x_off = math.cos(tempo * 2) * 10
-        y_off = math.sin(tempo * 2) * 20
+        w = self.screen.get_width()
+        h = self.screen.get_height()
+        x_off = math.cos(tempo * 1.5) * (w * 0.025)
+        y_off = math.sin(tempo * 1.5) * (h * 0.03)
         surf = self.fonte.render(self.rosto_atual, True, self.cor)
         rect = surf.get_rect(
-            center=(self.screen.get_width()//2 + x_off, self.screen.get_height()//2 + y_off)
+            center=(w // 2 + int(x_off), h // 2 + int(y_off))
         )
         self.screen.blit(surf, rect)

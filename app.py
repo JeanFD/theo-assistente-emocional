@@ -84,6 +84,7 @@ class App:
         self.ultimo_evento = pygame.time.get_ticks() / 1000
         self.segundos_dormir = 30
         self.teclado_ativo = False
+        self.ultimo_estado = Estado.DORMINDO
 
         self.fade_fundo = Transicao(tempo_fade=1.0)
         self.fade_rosto = Transicao(tempo_fade=1.0)
@@ -204,12 +205,16 @@ class App:
             self.estado = Estado.DORMINDO
 
     def render(self):
-        if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
-            self.fade_fundo.start(self.cor_fundo_atual, (0, 0, 0))
-            self.fade_rosto.start(self.cor_rosto_atual, (255, 255, 255))
-        elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0, 0, 0):
+        estado_mudou = self.estado != self.ultimo_estado
+        self.ultimo_estado = self.estado
+
+        if self.estado == Estado.DORMINDO:
+            if estado_mudou or (not self.fade_fundo.is_active() and self.cor_fundo_atual != PRETO):
+                self.fade_fundo.start(self.cor_fundo_atual, PRETO)
+                self.fade_rosto.start(self.cor_rosto_atual, BRANCO)
+        elif estado_mudou and self.cor_fundo_atual != BRANCO:
             self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
-            self.fade_rosto.start(self.cor_rosto_atual, (0, 0, 0))
+            self.fade_rosto.start(self.cor_rosto_atual, PRETO)
 
         nova_cor_fundo, _ = self.fade_fundo.update()
         nova_cor_rosto, _ = self.fade_rosto.update()
