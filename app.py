@@ -7,7 +7,7 @@ from sensores.batimentos import ler_batimentos
 from voz.tts import TTS
 # from comunicacao.envio_dados import enviar_servidor
 
-FADE_T = 0.3   
+FADE_T = 0.3
 DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
 BRANCO = (255, 255, 255)
@@ -18,7 +18,7 @@ class Estado(Enum):
     SELECIONAR_SENTIMENTO = auto()
     TIPO_SENTIMENTO = auto()
     ESCALA = auto()
-    OBRIGADO = auto() 
+    OBRIGADO = auto()
     BATIMENTO = auto()
     BATIMENTO_FINALIZADO = auto()
     AJUDA_IMEDIATA = auto()
@@ -63,7 +63,7 @@ class App:
 
         largura, altura = self.screen.get_size()
         self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
-        self.fonte_texto = pygame.font.SysFont("Arial", int(altura*0.1), bold=True)
+        self.fonte_texto = pygame.font.SysFont("Arial", int(altura * 0.1), bold=True)
         self.fonte_botao = "Arial"
 
         self.face = Face(self.fonte_rosto, self.screen)
@@ -89,9 +89,9 @@ class App:
         self.fade_rosto = Transicao(tempo_fade=1.0)
         self.cor_fundo_atual = PRETO
         self.cor_rosto_atual = BRANCO
-    
+
         self.fade_start_ms = pygame.time.get_ticks()
-    
+
     def run(self):
         while True:
             dt = self.clock.tick(60) / 1000.0
@@ -106,14 +106,14 @@ class App:
             if self.estado == Estado.DORMINDO and evento.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                 self.estado = Estado.INICIO
                 self.ultimo_evento = self.tempo
-                return 
+                return
             if evento.type == pygame.QUIT:
                 pygame.quit(), sys.exit()
 
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     pygame.quit(), sys.exit()
-                
+
                 if self.estado in STATE_CONFIG:
                     n = len(self.buttons_cache[self.estado])
                     if evento.key == pygame.K_LEFT:
@@ -126,11 +126,11 @@ class App:
                         clicked = self.indice_selecionado
 
                 if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        clicked = -1
+                    clicked = -1
 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 self.teclado_ativo = False
-                for i, (btn, _) in enumerate(self.buttons_cache.get(self.estado,[])):
+                for i, (btn, _) in enumerate(self.buttons_cache.get(self.estado, [])):
                     if btn.collidepoint(evento.pos):
                         clicked = i
                         break
@@ -196,36 +196,33 @@ class App:
 
     def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
-                 if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
-                      self.estado = Estado.INICIO
-                      self.indice_selecionado = 0
-                      self.tempo_obrigado = None
+            if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
+                self.estado = Estado.INICIO
+                self.indice_selecionado = 0
+                self.tempo_obrigado = None
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
             self.estado = Estado.DORMINDO
 
     def render(self):
         if self.estado == Estado.DORMINDO and not self.fade_fundo.is_active():
-            self.fade_fundo.start(self.cor_fundo_atual, (0,0,0))
-            self.fade_rosto.start(self.cor_rosto_atual, (255,255,255))
-        elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0,0,0):
+            self.fade_fundo.start(self.cor_fundo_atual, (0, 0, 0))
+            self.fade_rosto.start(self.cor_rosto_atual, (255, 255, 255))
+        elif self.estado != Estado.DORMINDO and not self.fade_fundo.is_active() and self.cor_fundo_atual == (0, 0, 0):
             self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
-            self.fade_rosto.start(self.cor_rosto_atual, (0,0,0))
+            self.fade_rosto.start(self.cor_rosto_atual, (0, 0, 0))
 
-        # Atualiza as cores suavemente
         nova_cor_fundo, _ = self.fade_fundo.update()
         nova_cor_rosto, _ = self.fade_rosto.update()
         self.cor_fundo_atual = nova_cor_fundo
         self.cor_rosto_atual = nova_cor_rosto
         self.screen.fill(self.cor_fundo_atual)
 
-
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
         desenhar_frase(self.screen, self.fonte_texto, text)
 
-        self.face.update(self.tempo, self.falando, dormindo=(self.estado==Estado.DORMINDO), cor=self.cor_rosto_atual)
+        self.face.update(self.tempo, self.falando, dormindo=(self.estado == Estado.DORMINDO), cor=self.cor_rosto_atual)
         self.face.desenhar(self.tempo)
 
-        
         tts_key = TTS_KEYS.get(self.estado, "")
         if tts_key and tts_key != self.ultimo_texto:
             self.tts.speak(tts_key)
