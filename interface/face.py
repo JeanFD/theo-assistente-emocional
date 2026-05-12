@@ -24,6 +24,16 @@ LOGO_PATH = os.path.join(
     "refs", "theo_pequeno1.png",
 )
 
+# Rotacao base (graus, CCW) aplicada permanentemente a cada blob.
+# No logo original os blobs estao em 2x2 apontando para o centro. Aqui
+# rotacionamos para a orientacao correta de um rosto em pe'.
+BASE_ROT_FOLHA = -30      # folha aponta para cima
+BASE_ROT_OLHO_ESQ = 45    # eixo do magenta horizontal
+BASE_ROT_OLHO_DIR = -45   # eixo do amarelo horizontal (lado oposto)
+BASE_ROT_BOCA = -45       # boca como sorriso horizontal
+# Espelha olho direito para virar mirror do esquerdo
+FLIP_OLHO_DIR = True
+
 
 @dataclass
 class ParametrosRosto:
@@ -157,21 +167,26 @@ class Face:
         magenta_q = img.subsurface((hw, 0, hw, hh)).copy()
         amarelo_q = img.subsurface((0, hh, hw, hh)).copy()
         azul_q = img.subsurface((hw, hh, hw, hh)).copy()
-        # Cortar cada um na bounding box (remove espaco preto ao redor)
-        self.spr_folha = _crop_bbox(folha_q)
-        self.spr_olho_esq = _crop_bbox(magenta_q)
-        self.spr_olho_dir = _crop_bbox(amarelo_q)
-        self.spr_boca = _crop_bbox(azul_q)
+        # Crop bbox + rotacao base (aplicada uma vez, no carregamento)
+        folha_c = _crop_bbox(folha_q)
+        magenta_c = _crop_bbox(magenta_q)
+        amarelo_c = _crop_bbox(amarelo_q)
+        azul_c = _crop_bbox(azul_q)
+        if FLIP_OLHO_DIR:
+            amarelo_c = pygame.transform.flip(amarelo_c, True, False)
+        self.spr_folha = _crop_bbox(pygame.transform.rotate(folha_c, BASE_ROT_FOLHA))
+        self.spr_olho_esq = _crop_bbox(pygame.transform.rotate(magenta_c, BASE_ROT_OLHO_ESQ))
+        self.spr_olho_dir = _crop_bbox(pygame.transform.rotate(amarelo_c, BASE_ROT_OLHO_DIR))
+        self.spr_boca = _crop_bbox(pygame.transform.rotate(azul_c, BASE_ROT_BOCA))
 
     def _recalcular_layout(self):
         w, h = self.screen.get_size()
         self.tela_w = w
         self.tela_h = h
         # Rosto em pe': tamanhos relativos a altura
-        # Definimos alturas de cada elemento. O rosto inteiro ocupa ~80% da altura
-        self.h_folha = int(h * 0.20)
-        self.h_olho = int(h * 0.22)
-        self.h_boca = int(h * 0.20)
+        self.h_folha = int(h * 0.16)
+        self.h_olho = int(h * 0.18)
+        self.h_boca = int(h * 0.16)
         # Largura proporcional preservada de cada sprite
         def _largura(spr, altura_alvo):
             ow, oh = spr.get_size()
@@ -180,15 +195,14 @@ class Face:
         self.w_olho_esq = _largura(self.spr_olho_esq, self.h_olho)
         self.w_olho_dir = _largura(self.spr_olho_dir, self.h_olho)
         self.w_boca = _largura(self.spr_boca, self.h_boca)
-        # Posicao base (centro de cada elemento)
+        # Posicao base (centro de cada elemento) — componentes proximos
         cx = w // 2
         cy = h // 2
-        espaco_olhos = int(w * 0.16)
-        # Layout vertical: folha cima, olhos meio, boca baixo
-        self.pos_folha = (cx, cy - int(h * 0.28))
-        self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.02))
-        self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.02))
-        self.pos_boca = (cx, cy + int(h * 0.24))
+        espaco_olhos = int(w * 0.11)  # distancia entre olhos (mais junto)
+        self.pos_folha = (cx, cy - int(h * 0.22))    # folha menos alta
+        self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.01))
+        self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.01))
+        self.pos_boca = (cx, cy + int(h * 0.18))     # boca mais perto
 
     def set_expressao(self, nome, instantaneo=False):
         if nome not in EXPRESSOES:
