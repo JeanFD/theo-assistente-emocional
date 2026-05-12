@@ -28,8 +28,8 @@ LOGO_PATH = os.path.join(
 # No logo original os blobs estao em 2x2 apontando para o centro. Aqui
 # rotacionamos para a orientacao correta de um rosto em pe'.
 BASE_ROT_FOLHA = -30      # folha aponta para cima
-BASE_ROT_OLHO_ESQ = 45    # eixo do magenta horizontal
-BASE_ROT_OLHO_DIR = -45   # eixo do amarelo horizontal (lado oposto)
+BASE_ROT_OLHO_ESQ = 135   # magenta horizontal com fenda para dentro
+BASE_ROT_OLHO_DIR = -135  # amarelo espelhado, fenda para dentro
 BASE_ROT_BOCA = -45       # boca como sorriso horizontal
 # Espelha olho direito para virar mirror do esquerdo
 FLIP_OLHO_DIR = True
@@ -185,7 +185,7 @@ class Face:
         self.tela_h = h
         # Rosto em pe': tamanhos relativos a altura
         self.h_folha = int(h * 0.16)
-        self.h_olho = int(h * 0.18)
+        self.h_olho = int(h * 0.22)
         self.h_boca = int(h * 0.16)
         # Largura proporcional preservada de cada sprite
         def _largura(spr, altura_alvo):
@@ -198,7 +198,7 @@ class Face:
         # Posicao base (centro de cada elemento) — componentes proximos
         cx = w // 2
         cy = h // 2
-        espaco_olhos = int(w * 0.11)  # distancia entre olhos (mais junto)
+        espaco_olhos = int(w * 0.09)  # distancia entre olhos (mais junto)
         self.pos_folha = (cx, cy - int(h * 0.22))    # folha menos alta
         self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.01))
         self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.01))
