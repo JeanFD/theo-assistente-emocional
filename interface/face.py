@@ -1,10 +1,16 @@
-"""Rosto do THEO baseado na logo oficial.
+"""Rosto do THEO em pe' (folha no topo, olhos no meio, boca embaixo).
 
-Carrega `refs/theo_pequeno1.png`, separa em 4 sprites (folha, olho esquerdo,
-olho direito, boca) e os anima individualmente. Quando a expressao e' "feliz",
-os 4 sprites ficam exatamente na mesma posicao da logo original — o rosto
-e' identico a logo. Para outras expressoes, cada sprite e' escalado/movido
-suavemente via interpolacao (lerp).
+Os sprites vem da logo (refs/theo_pequeno1.png), com fundo preto convertido
+para alpha gradiente (preserva bordas suaves) e cortados na bounding box
+para evitar deslocamentos.
+
+Animacoes combinam:
+  - Lerp suave entre expressoes (parametros de scale/rotacao/offset)
+  - Drift contInuo independente por blob (cada um oscila em frequencia
+    propria, dando vida ao rosto sem so 'crescer e encolher')
+  - Sway da folha como uma planta ao vento
+  - Olhos olham levemente em redor durante o idle
+  - Boca tem respiracao sutil e pulsa quando falando
 """
 
 import os
@@ -21,63 +27,58 @@ LOGO_PATH = os.path.join(
 
 @dataclass
 class ParametrosRosto:
-    """Modificacoes (scale/offset/rotacao) aplicadas a cada blob.
-
-    Todos os valores padrao = 0 ou 1, o que reproduz a logo original.
-    """
-    # Folha verde (top-left)
+    """Modificadores por blob (escala/offset/rotacao). 1.0/0.0 = neutro."""
     folha_scale: float = 1.0
-    folha_dx: float = 0.0
     folha_dy: float = 0.0
     folha_rot: float = 0.0
-    # Olho esquerdo magenta (top-right)
     olho_esq_sx: float = 1.0
     olho_esq_sy: float = 1.0
     olho_esq_dy: float = 0.0
-    # Olho direito amarelo (bottom-left)
     olho_dir_sx: float = 1.0
     olho_dir_sy: float = 1.0
     olho_dir_dy: float = 0.0
-    # Boca azul (bottom-right)
     boca_sx: float = 1.0
     boca_sy: float = 1.0
     boca_dy: float = 0.0
     boca_rot: float = 0.0
 
 
-# SORRINDO = parametros default = logo identica
-EXPRESSAO_FELIZ = ParametrosRosto()
-
 EXPRESSOES = {
-    "feliz": EXPRESSAO_FELIZ,
+    "feliz": ParametrosRosto(
+        folha_rot=-5,
+        boca_sx=1.05, boca_sy=1.05,
+    ),
     "neutro": ParametrosRosto(
         boca_sx=0.78, boca_sy=0.72,
     ),
     "triste": ParametrosRosto(
-        olho_esq_sy=0.92, olho_dir_sy=0.92,
+        olho_esq_sy=0.85, olho_dir_sy=0.85,
         olho_esq_dy=0.02, olho_dir_dy=0.02,
-        boca_sx=0.85, boca_sy=0.65, boca_rot=180,
-        folha_rot=14,
+        boca_sx=0.85, boca_sy=0.6, boca_rot=180,
+        folha_rot=18,
     ),
     "ansioso": ParametrosRosto(
-        olho_esq_sx=1.18, olho_esq_sy=1.2,
-        olho_dir_sx=1.18, olho_dir_sy=1.2,
-        boca_sx=0.55, boca_sy=0.65,
+        olho_esq_sx=1.15, olho_esq_sy=1.18,
+        olho_dir_sx=1.15, olho_dir_sy=1.18,
+        boca_sx=0.55, boca_sy=0.6,
+        folha_rot=8,
     ),
     "irritado": ParametrosRosto(
         olho_esq_sy=0.55, olho_dir_sy=0.55,
-        boca_sx=0.8, boca_sy=0.5, boca_rot=180,
+        boca_sx=0.8, boca_sy=0.45, boca_rot=180,
+        folha_rot=-2,
     ),
     "surpreso": ParametrosRosto(
-        olho_esq_sx=1.3, olho_esq_sy=1.35,
-        olho_dir_sx=1.3, olho_dir_sy=1.35,
-        boca_sx=0.55, boca_sy=0.95,
+        olho_esq_sx=1.32, olho_esq_sy=1.35,
+        olho_dir_sx=1.32, olho_dir_sy=1.35,
+        boca_sx=0.55, boca_sy=1.0,
+        folha_rot=-8,
     ),
     "dormindo": ParametrosRosto(
-        olho_esq_sy=0.05, olho_dir_sy=0.05,
+        olho_esq_sy=0.04, olho_dir_sy=0.04,
         olho_esq_dy=0.02, olho_dir_dy=0.02,
-        boca_sx=0.4, boca_sy=0.4,
-        folha_rot=-22,
+        boca_sx=0.42, boca_sy=0.42,
+        folha_rot=-25,
     ),
 }
 
@@ -86,17 +87,49 @@ def _lerp(a, b, t):
     return a + (b - a) * t
 
 
-def _carregar_logo():
-    """Carrega o PNG da logo, garantindo fundo transparente."""
-    img = pygame.image.load(LOGO_PATH).convert_alpha()
-    # Heuristica: se o canto e' preto opaco, o PNG tem fundo preto solido.
-    # Nesse caso aplicamos colorkey para tornar preto transparente.
-    corner = img.get_at((0, 0))
-    if corner[3] == 255 and max(corner[:3]) < 30:
-        plana = img.convert()
-        plana.set_colorkey((0, 0, 0))
-        return plana
-    return img
+def _converter_fundo_para_alpha(img):
+    """Converte o fundo preto em transparencia real (com gradiente nas bordas).
+
+    Para cada pixel, alpha = max(R,G,B). Pixels pretos viram totalmente
+    transparentes, pixels coloridos opacos, e bordas anti-aliased ganham
+    alpha intermediario — eliminando o halo/serrilhado.
+    """
+    img = img.convert_alpha()
+    w, h = img.get_size()
+    raw = pygame.image.tostring(img, "RGBA")
+    ba = bytearray(raw)
+    n = len(ba)
+    i = 0
+    while i < n:
+        r = ba[i]
+        g = ba[i + 1]
+        b = ba[i + 2]
+        brilho = r if r > g else g
+        if b > brilho:
+            brilho = b
+        if brilho < 16:
+            ba[i + 3] = 0
+        elif brilho > 96:
+            ba[i + 3] = 255
+        else:
+            ba[i + 3] = int((brilho - 16) * 255 / 80)
+        i += 4
+    return pygame.image.fromstring(bytes(ba), (w, h), "RGBA")
+
+
+def _crop_bbox(surface):
+    """Corta surface na bounding box do conteudo nao transparente."""
+    mask = pygame.mask.from_surface(surface)
+    if mask.count() == 0:
+        return surface
+    rects = mask.get_bounding_rects()
+    if not rects:
+        return surface
+    bbox = max(rects, key=lambda r: r.w * r.h)
+    bbox = bbox.inflate(8, 8).clip(surface.get_rect())
+    if bbox.w <= 0 or bbox.h <= 0:
+        return surface
+    return surface.subsurface(bbox).copy()
 
 
 class Face:
@@ -115,35 +148,47 @@ class Face:
         self._falando_offset = 0.0
 
     def _carregar_sprites(self):
-        logo = _carregar_logo()
-        w, h = logo.get_size()
+        img = pygame.image.load(LOGO_PATH)
+        img = _converter_fundo_para_alpha(img)
+        w, h = img.get_size()
         hw, hh = w // 2, h // 2
-        # Quadrantes da logo (1:1 com as 4 cores)
-        self.spr_folha = logo.subsurface((0, 0, hw, hh)).copy()
-        self.spr_olho_esq = logo.subsurface((hw, 0, hw, hh)).copy()
-        self.spr_olho_dir = logo.subsurface((0, hh, hw, hh)).copy()
-        self.spr_boca = logo.subsurface((hw, hh, hw, hh)).copy()
+        # Quadrantes na ordem da logo
+        folha_q = img.subsurface((0, 0, hw, hh)).copy()
+        magenta_q = img.subsurface((hw, 0, hw, hh)).copy()
+        amarelo_q = img.subsurface((0, hh, hw, hh)).copy()
+        azul_q = img.subsurface((hw, hh, hw, hh)).copy()
+        # Cortar cada um na bounding box (remove espaco preto ao redor)
+        self.spr_folha = _crop_bbox(folha_q)
+        self.spr_olho_esq = _crop_bbox(magenta_q)
+        self.spr_olho_dir = _crop_bbox(amarelo_q)
+        self.spr_boca = _crop_bbox(azul_q)
 
     def _recalcular_layout(self):
         w, h = self.screen.get_size()
         self.tela_w = w
         self.tela_h = h
-        # Rosto quadrado, grande, centrado na tela
-        self.face_size = int(min(h * 0.82, w * 0.62))
-        self.face_w = self.face_size
-        self.face_h = self.face_size
-        # Tamanho de cada quadrante (1/2 do rosto em cada dim)
-        self.quad_w = self.face_size // 2
-        self.quad_h = self.face_size // 2
-        # Centro do rosto = centro da tela
-        self.face_cx = w // 2
-        self.face_cy = h // 2
-        # Posicao do centro de cada quadrante (replica logo 2x2)
-        off = self.face_size / 4
-        self.pos_folha = (self.face_cx - off, self.face_cy - off)
-        self.pos_olho_esq = (self.face_cx + off, self.face_cy - off)
-        self.pos_olho_dir = (self.face_cx - off, self.face_cy + off)
-        self.pos_boca = (self.face_cx + off, self.face_cy + off)
+        # Rosto em pe': tamanhos relativos a altura
+        # Definimos alturas de cada elemento. O rosto inteiro ocupa ~80% da altura
+        self.h_folha = int(h * 0.20)
+        self.h_olho = int(h * 0.22)
+        self.h_boca = int(h * 0.20)
+        # Largura proporcional preservada de cada sprite
+        def _largura(spr, altura_alvo):
+            ow, oh = spr.get_size()
+            return int(altura_alvo * ow / oh)
+        self.w_folha = _largura(self.spr_folha, self.h_folha)
+        self.w_olho_esq = _largura(self.spr_olho_esq, self.h_olho)
+        self.w_olho_dir = _largura(self.spr_olho_dir, self.h_olho)
+        self.w_boca = _largura(self.spr_boca, self.h_boca)
+        # Posicao base (centro de cada elemento)
+        cx = w // 2
+        cy = h // 2
+        espaco_olhos = int(w * 0.16)
+        # Layout vertical: folha cima, olhos meio, boca baixo
+        self.pos_folha = (cx, cy - int(h * 0.28))
+        self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.02))
+        self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.02))
+        self.pos_boca = (cx, cy + int(h * 0.24))
 
     def set_expressao(self, nome, instantaneo=False):
         if nome not in EXPRESSOES:
@@ -168,7 +213,7 @@ class Face:
             setattr(self.atual, f.name, _lerp(v_atual, v_alvo, fator))
 
         if not dormindo:
-            if tempo >= self.ultimo_piscar + 3.2:
+            if tempo >= self.ultimo_piscar + 3.4:
                 self.piscando_ate = tempo + 0.14
                 self.ultimo_piscar = tempo
         self._piscando_intensidade = 0.0
@@ -180,48 +225,88 @@ class Face:
         if falando and not dormindo:
             self._falando_offset = (math.sin(tempo * 11) + 1) / 2
 
-    def _blit_quadrante(self, sprite, pos_base, offset_face, scale_x, scale_y, dy, rot, dx=0.0):
-        target_w = max(2, int(self.quad_w * scale_x))
-        target_h = max(2, int(self.quad_h * scale_y))
+    def _blit(self, sprite, w_base, h_base, pos_x, pos_y, sx, sy, rot):
+        target_w = max(2, int(w_base * sx))
+        target_h = max(2, int(h_base * sy))
         s = pygame.transform.smoothscale(sprite, (target_w, target_h))
         if rot:
             s = pygame.transform.rotate(s, rot)
-        cx = pos_base[0] + offset_face[0] + dx * self.face_w
-        cy = pos_base[1] + offset_face[1] + dy * self.face_h
-        rect = s.get_rect(center=(int(cx), int(cy)))
+        rect = s.get_rect(center=(int(pos_x), int(pos_y)))
         self.screen.blit(s, rect.topleft)
 
     def desenhar(self, tempo):
-        flutua_x = math.cos(tempo * 1.1) * self.tela_w * 0.010
-        flutua_y = math.sin(tempo * 0.9) * self.tela_h * 0.014
-        offset_face = (flutua_x, flutua_y)
+        # Float global do rosto inteiro
+        flutua_x = math.cos(tempo * 1.1) * self.tela_w * 0.008
+        flutua_y = math.sin(tempo * 0.9) * self.tela_h * 0.010
 
         p = self.atual
-        # Modulacoes em tempo real
-        pisca_factor = (1 - 0.92 * self._piscando_intensidade)
-        fala_factor = (1 + 0.30 * self._falando_offset)
+        dormindo = self.expressao_nome == "dormindo"
 
-        # Folha verde (top-left da logo)
-        self._blit_quadrante(
-            self.spr_folha, self.pos_folha, offset_face,
-            scale_x=p.folha_scale, scale_y=p.folha_scale,
-            dy=p.folha_dy, dx=p.folha_dx, rot=p.folha_rot,
+        # === ANIMACOES INDEPENDENTES POR BLOB (vida sutil, nao so scale) ===
+        # Cada um tem frequencia/fase distinta — sensacao organica, vivo
+        amp_drift = self.tela_h * 0.006  # amplitude pequena, sutil
+        if dormindo:
+            amp_drift *= 0.3  # quase parado dormindo
+
+        folha_dx = math.sin(tempo * 1.6 + 0.0) * amp_drift * 0.6
+        folha_dy_drift = math.cos(tempo * 1.2 + 0.0) * amp_drift * 0.4
+        folha_rot_sway = math.sin(tempo * 1.4) * 4.0  # vai e volta como folha ao vento
+
+        olho_esq_dx = math.sin(tempo * 0.9 + 1.2) * amp_drift * 0.5
+        olho_esq_dy_drift = math.cos(tempo * 1.1 + 1.2) * amp_drift * 0.5
+        olho_dir_dx = math.sin(tempo * 0.9 + 2.4) * amp_drift * 0.5
+        olho_dir_dy_drift = math.cos(tempo * 1.1 + 2.4) * amp_drift * 0.5
+
+        boca_dx_drift = math.sin(tempo * 0.7 + 3.6) * amp_drift * 0.4
+        boca_dy_drift = math.cos(tempo * 0.7 + 3.6) * amp_drift * 0.6
+        # Respiracao sutil: boca pulsa devagar mesmo parada
+        respiracao = 1.0 + math.sin(tempo * 1.8) * 0.025
+        # Olhos "respiram" com pequenos squashes (efeito vivo, nao so blink)
+        olho_breath = 1.0 + math.sin(tempo * 1.8 + 1.0) * 0.02
+
+        # Olhares ocasionais (cada ~7s, olho se desloca lateralmente por 1s)
+        olhar_x_periodo = (tempo % 7.0) - 6.0  # ativo por 1s no fim do ciclo
+        if olhar_x_periodo > 0 and not dormindo:
+            olhar_offset = math.sin(olhar_x_periodo * math.pi) * self.tela_w * 0.012
+            olho_esq_dx += olhar_offset
+            olho_dir_dx += olhar_offset
+
+        # === PISCAR e FALAR ===
+        pisca_factor = 1 - 0.94 * self._piscando_intensidade
+        fala_factor = 1 + 0.35 * self._falando_offset
+        # Falando: boca tambem desloca um pouquinho pra cima na pulsacao
+        fala_dy = -self._falando_offset * self.tela_h * 0.004
+
+        # === DESENHO ===
+        # Folha
+        self._blit(
+            self.spr_folha, self.w_folha, self.h_folha,
+            self.pos_folha[0] + flutua_x + folha_dx,
+            self.pos_folha[1] + flutua_y + folha_dy_drift,
+            p.folha_scale, p.folha_scale,
+            p.folha_rot + folha_rot_sway,
         )
-        # Olho esquerdo magenta (top-right da logo)
-        self._blit_quadrante(
-            self.spr_olho_esq, self.pos_olho_esq, offset_face,
-            scale_x=p.olho_esq_sx, scale_y=p.olho_esq_sy * pisca_factor,
-            dy=p.olho_esq_dy, rot=0,
+        # Olho esquerdo (magenta)
+        self._blit(
+            self.spr_olho_esq, self.w_olho_esq, self.h_olho,
+            self.pos_olho_esq[0] + flutua_x + olho_esq_dx,
+            self.pos_olho_esq[1] + flutua_y + olho_esq_dy_drift + p.olho_esq_dy * self.tela_h,
+            p.olho_esq_sx, p.olho_esq_sy * pisca_factor * olho_breath,
+            0,
         )
-        # Olho direito amarelo (bottom-left da logo)
-        self._blit_quadrante(
-            self.spr_olho_dir, self.pos_olho_dir, offset_face,
-            scale_x=p.olho_dir_sx, scale_y=p.olho_dir_sy * pisca_factor,
-            dy=p.olho_dir_dy, rot=0,
+        # Olho direito (amarelo)
+        self._blit(
+            self.spr_olho_dir, self.w_olho_dir, self.h_olho,
+            self.pos_olho_dir[0] + flutua_x + olho_dir_dx,
+            self.pos_olho_dir[1] + flutua_y + olho_dir_dy_drift + p.olho_dir_dy * self.tela_h,
+            p.olho_dir_sx, p.olho_dir_sy * pisca_factor * olho_breath,
+            0,
         )
-        # Boca azul (bottom-right da logo)
-        self._blit_quadrante(
-            self.spr_boca, self.pos_boca, offset_face,
-            scale_x=p.boca_sx, scale_y=p.boca_sy * fala_factor,
-            dy=p.boca_dy, rot=p.boca_rot,
+        # Boca (azul)
+        self._blit(
+            self.spr_boca, self.w_boca, self.h_boca,
+            self.pos_boca[0] + flutua_x + boca_dx_drift,
+            self.pos_boca[1] + flutua_y + boca_dy_drift + p.boca_dy * self.tela_h + fala_dy,
+            p.boca_sx * respiracao, p.boca_sy * fala_factor * respiracao,
+            p.boca_rot,
         )
