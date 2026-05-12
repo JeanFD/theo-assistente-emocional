@@ -1,4 +1,4 @@
-import pygame, sys
+import pygame, sys, math
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade, fonte
 from interface.face import Face
@@ -14,6 +14,25 @@ from voz.tts import TTS
 FADE_T = 0.3
 DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
+
+RESP_INSPIRE_DUR = 4.0
+RESP_SEGURE_DUR  = 2.0
+RESP_EXPIRE_DUR  = 4.0
+
+GROUNDING_TEXTOS = {
+    1: "O que você consegue ver?",
+    2: "O que você consegue ouvir?",
+    3: "O que você consegue tocar?",
+    4: "O que você consegue cheirar?",
+    5: "O que você consegue saborear?",
+}
+
+RESP_TEXTOS = {
+    "intro":   "Vamos respirar juntos...",
+    "inspire": "Inspire...",
+    "segure":  "Segure...",
+    "expire":  "Expire...",
+}
 
 
 class Estado(Enum):
@@ -108,6 +127,10 @@ class App:
         self.tts = TTS()
         self.ultimo_texto = ""
 
+        self.resp_fase = None           # "intro" | "inspire" | "segure" | "expire"
+        self.resp_tempo_fase = 0.0
+        self.grounding_q = 1            # questão atual (1–5)
+
         self.ultimo_evento = pygame.time.get_ticks() / 1000
         self.segundos_dormir = 30
         self.teclado_ativo = False
@@ -201,18 +224,83 @@ class App:
         elif self.estado == Estado.AJUDA_IMEDIATA:
             if clicked == 0:
                 self.estado = Estado.RESPIRACAO
+                self.resp_fase = "intro"
+                self.resp_tempo_fase = self.tempo
+                self._tts_play("respiracao_intro")
             elif clicked == 1:
                 self.estado = Estado.GROUNDING
+                self.grounding_q = 1
+                self._tts_play("grounding_q1")
             elif clicked == 2:
                 self.estado = Estado.INICIO
             self.indice_selecionado = 0
 
-        elif self.estado in (Estado.RESPIRACAO, Estado.GROUNDING):
+        elif self.estado == Estado.RESPIRACAO:
+            self.resp_fase = None
+            self.tts.stop()
+            self.falando = False
             self.estado = Estado.AJUDA_IMEDIATA
+            self.indice_selecionado = 0
+
+        elif self.estado == Estado.GROUNDING:
+            if clicked == 0 and self.grounding_q < 5:
+                self.grounding_q += 1
+                self._tts_play(f"grounding_q{self.grounding_q}")
+            else:
+                self.estado = Estado.AJUDA_IMEDIATA
+                self.grounding_q = 1
             self.indice_selecionado = 0
 
         elif self.estado == Estado.DORMINDO:
             self.estado = Estado.INICIO
+
+    def _desenhar_circulo_respiracao(self):
+        fase = self.resp_fase
+        if not fase or fase == "intro":
+            return
+
+        elapsed = self.tempo - self.resp_tempo_fase
+        h = self.screen.get_height()
+        cx = self.screen.get_width() // 2
+
+        r_min = int(h * 0.022)
+        r_max = int(h * 0.052)
+
+        def ease(t):
+            return -(math.cos(math.pi * t) - 1) / 2
+
+        if fase == "inspire":
+            t = min(1.0, elapsed / RESP_INSPIRE_DUR)
+            r = int(r_min + (r_max - r_min) * ease(t))
+        elif fase == "segure":
+            r = r_max
+        elif fase == "expire":
+            t = min(1.0, elapsed / RESP_EXPIRE_DUR)
+            r = int(r_max - (r_max - r_min) * ease(t))
+        else:
+            return
+
+        # Posição: à esquerda do texto, alinhado verticalmente com ele
+        texto_fase = RESP_TEXTOS.get(fase, "")
+        tw, _ = self.fonte_texto.size(texto_fase)
+        padding = int(h * 0.02)
+        # Usa r_max como reserva fixa de espaço para o círculo não deslocar o texto
+        x = cx - tw // 2 - padding - r_max
+        y = int(h * 0.13)
+
+        pygame.draw.circle(self.screen, (0, 160, 225), (x, y), r)
+        pygame.draw.circle(self.screen, (15, 36, 56), (x, y), r, 2)
+
+    def _tts_play(self, key):
+        self.tts.stop()
+        self.tts.speak(key)
+        self.falando = True
+        self.ultimo_texto = key
+
+    def _avancar_resp(self, nova_fase):
+        self.resp_fase = nova_fase
+        self.resp_tempo_fase = self.tempo
+        self._tts_play(f"respiracao_{nova_fase}")
 
     def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
@@ -222,6 +310,17 @@ class App:
                 self.tempo_obrigado = None
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
             self.estado = Estado.DORMINDO
+
+        if self.estado == Estado.RESPIRACAO and self.resp_fase is not None:
+            elapsed = self.tempo - self.resp_tempo_fase
+            if self.resp_fase == "intro" and not self.tts.speaking:
+                self._avancar_resp("inspire")
+            elif self.resp_fase == "inspire" and elapsed >= RESP_INSPIRE_DUR:
+                self._avancar_resp("segure")
+            elif self.resp_fase == "segure" and elapsed >= RESP_SEGURE_DUR:
+                self._avancar_resp("expire")
+            elif self.resp_fase == "expire" and elapsed >= RESP_EXPIRE_DUR:
+                self._avancar_resp("inspire")
 
     def render(self, dt):
         estado_mudou = self.estado != self.ultimo_estado
@@ -240,6 +339,10 @@ class App:
         luminancia = sum(self.cor_fundo_atual) / 3
         cor_texto = COR_TEXTO if luminancia > 127 else BRANCO
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
+        if self.estado == Estado.RESPIRACAO and self.resp_fase:
+            text = RESP_TEXTOS.get(self.resp_fase, text)
+        elif self.estado == Estado.GROUNDING:
+            text = GROUNDING_TEXTOS.get(self.grounding_q, text)
         desenhar_frase(self.screen, self.fonte_texto, text, cor=cor_texto)
 
         # Rosto
@@ -249,13 +352,18 @@ class App:
         self.face.update(dt, self.tempo, falando=self.falando, dormindo=dormindo)
         self.face.desenhar(self.tempo)
 
-        # TTS
-        tts_key = TTS_KEYS.get(self.estado, "")
-        if tts_key and tts_key != self.ultimo_texto:
-            self.tts.speak(tts_key)
-            self.falando = True
-            self.ultimo_texto = tts_key
-        elif self.falando and not self.tts.speaking:
+        # Circulo animado de respiracao (na frente do rosto)
+        if self.estado == Estado.RESPIRACAO:
+            self._desenhar_circulo_respiracao()
+
+        # TTS — RESPIRACAO e GROUNDING gerenciam o proprio audio via on_click/update_tempo
+        if self.estado not in (Estado.RESPIRACAO, Estado.GROUNDING):
+            tts_key = TTS_KEYS.get(self.estado, "")
+            if tts_key and tts_key != self.ultimo_texto:
+                self.tts.speak(tts_key)
+                self.falando = True
+                self.ultimo_texto = tts_key
+        if self.falando and not self.tts.speaking:
             self.falando = False
 
         # Botoes

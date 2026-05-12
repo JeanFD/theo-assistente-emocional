@@ -68,7 +68,7 @@ EXPRESSOES = {
     "triste": ParametrosRosto(
         olho_esq_sy=0.85, olho_dir_sy=0.85,
         olho_esq_dy=0.02, olho_dir_dy=0.02,
-        boca_sx=0.85, boca_sy=0.6, boca_rot=180,
+        boca_sx=0.7, boca_sy=0.45, boca_dy=0.02, boca_rot=-15,
         folha_rot=18,
     ),
     "ansioso": ParametrosRosto(
@@ -249,7 +249,7 @@ class Face:
 
         self._falando_offset = 0.0
         if falando and not dormindo:
-            self._falando_offset = (math.sin(tempo * 11) + 1) / 2
+            self._falando_offset = (math.sin(tempo * 15) + 1) / 2
 
     def _blit(self, sprite, w_base, h_base, pos_x, pos_y, sx, sy, rot):
         target_w = max(2, int(w_base * sx))
