@@ -169,7 +169,7 @@ class App:
             self.indice_selecionado = 0
 
         elif self.estado == Estado.OBRIGADO:
-            self.estado = Estado.INICIO
+            self.estado = Estado.DORMINDO
             self.indice_selecionado = 0
 
         elif self.estado == Estado.BATIMENTO:
@@ -198,7 +198,7 @@ class App:
     def update_tempo(self):
         if self.estado == Estado.OBRIGADO and self.tempo_obrigado is not None:
             if self.tempo - self.tempo_obrigado >= DURACAO_OBRIGADO:
-                self.estado = Estado.INICIO
+                self.estado = Estado.DORMINDO
                 self.indice_selecionado = 0
                 self.tempo_obrigado = None
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
@@ -211,15 +211,15 @@ class App:
         if self.estado == Estado.DORMINDO:
             if estado_mudou or (not self.fade_fundo.is_active() and self.cor_fundo_atual != PRETO):
                 self.fade_fundo.start(self.cor_fundo_atual, PRETO)
-                self.fade_rosto.start(self.cor_rosto_atual, BRANCO)
         elif estado_mudou and self.cor_fundo_atual != BRANCO:
             self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
-            self.fade_rosto.start(self.cor_rosto_atual, PRETO)
 
         nova_cor_fundo, _ = self.fade_fundo.update()
-        nova_cor_rosto, _ = self.fade_rosto.update()
         self.cor_fundo_atual = nova_cor_fundo
-        self.cor_rosto_atual = nova_cor_rosto
+
+        luminancia = sum(self.cor_fundo_atual) / 3
+        self.cor_rosto_atual = PRETO if luminancia > 127 else BRANCO
+
         self.screen.fill(self.cor_fundo_atual)
 
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
