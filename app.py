@@ -201,7 +201,13 @@ class App:
 
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
             self.registro['sentimento'] = STATE_CONFIG[self.estado][1][clicked]
-            self.estado = Estado.TIPO_SENTIMENTO if clicked == 3 else Estado.ESCALA
+            if clicked == 1:  # Neutro — sem intensidade nem tipo
+                self.estado = Estado.OBRIGADO
+                self.tempo_obrigado = self.tempo
+            elif clicked == 3:  # Ansioso — pede tipo antes da escala
+                self.estado = Estado.TIPO_SENTIMENTO
+            else:
+                self.estado = Estado.ESCALA
             self.indice_selecionado = 0
 
         elif self.estado == Estado.TIPO_SENTIMENTO:
