@@ -209,10 +209,10 @@ class Face:
         cx = w // 2
         cy = h // 2
         espaco_olhos = int(w * 0.09)  # distancia entre olhos (mais junto)
-        self.pos_folha = (cx, cy - int(h * 0.22))    # folha menos alta
-        self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.01))
-        self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.01))
-        self.pos_boca = (cx, cy + int(h * 0.18))     # boca mais perto
+        self.pos_folha = (cx, cy - int(h * 0.24))
+        self.pos_olho_esq = (cx - espaco_olhos, cy - int(h * 0.04))
+        self.pos_olho_dir = (cx + espaco_olhos, cy - int(h * 0.04))
+        self.pos_boca = (cx, cy + int(h * 0.22))
 
     def set_expressao(self, nome, instantaneo=False):
         if nome not in EXPRESSOES:
