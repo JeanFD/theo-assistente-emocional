@@ -1,17 +1,20 @@
-import pygame, sys, math
+import pygame, sys
 from enum import Enum, auto
 from interface.ui import criar_botoes, desenhar_frase, desenhar_botoes_fade
 from interface.face import Face
 from interface.transicao import Transicao
-from sensores.batimentos import ler_batimentos
+from interface.tema import (
+    BRANCO, PRETO, AZUL_MARINHO,
+    COR_FUNDO, COR_TEXTO, BOTAO_PADRAO,
+    COR_FELIZ, COR_TRISTE, COR_ANSIOSO, COR_IRRITADO,
+)
 from voz.tts import TTS
 # from comunicacao.envio_dados import enviar_servidor
 
 FADE_T = 0.3
 DELAY_BTWN = 0.2
 DURACAO_OBRIGADO = 5.0
-BRANCO = (255, 255, 255)
-PRETO = (0, 0, 0)
+
 
 class Estado(Enum):
     INICIO = auto()
@@ -19,12 +22,11 @@ class Estado(Enum):
     TIPO_SENTIMENTO = auto()
     ESCALA = auto()
     OBRIGADO = auto()
-    BATIMENTO = auto()
-    BATIMENTO_FINALIZADO = auto()
     AJUDA_IMEDIATA = auto()
     RESPIRACAO = auto()
     GROUNDING = auto()
     DORMINDO = auto()
+
 
 TTS_KEYS = {
     Estado.INICIO: "inicio",
@@ -35,22 +37,48 @@ TTS_KEYS = {
     Estado.AJUDA_IMEDIATA: "ajuda_imediata",
     Estado.RESPIRACAO: "respiracao_intro",
     Estado.GROUNDING: "grounding_q1",
-    Estado.BATIMENTO: "batimento_instrucao",
+}
+
+# Mapeia estado -> expressao do rosto
+EXPRESSAO_POR_ESTADO = {
+    Estado.INICIO: "feliz",
+    Estado.SELECIONAR_SENTIMENTO: "neutro",
+    Estado.TIPO_SENTIMENTO: "neutro",
+    Estado.ESCALA: "neutro",
+    Estado.OBRIGADO: "feliz",
+    Estado.AJUDA_IMEDIATA: "triste",
+    Estado.RESPIRACAO: "neutro",
+    Estado.GROUNDING: "neutro",
+    Estado.DORMINDO: "dormindo",
 }
 
 STATE_CONFIG = {
-    Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Registrar batimento", "Suporte imediato"]),
+    Estado.INICIO: ("O que deseja fazer?", ["Registrar humor", "Suporte imediato"]),
     Estado.SELECIONAR_SENTIMENTO: ("Como você se sente?", ["Feliz", "Neutro", "Triste", "Ansioso"]),
-    Estado.TIPO_SENTIMENTO: ("Ligado a algo bom ou ruim?", ["Bom", "Ruim", "Não sei"]),
-    Estado.ESCALA: ("Em escala de 1 a 5, quão forte é?", [str(i) for i in range(1, 6)]),
-    Estado.OBRIGADO: ("Obrigado, aguardarei os próximos registros", []),
-    Estado.BATIMENTO: ("Seu batimento: {} bpm", ["OK"]),
-    Estado.BATIMENTO_FINALIZADO: ("", []),
-    Estado.AJUDA_IMEDIATA: ("Você está passando por um momento difícil, Estou aqui com você. Vamos tentar algumas coisas para te acalmar, tudo bem?", ["Respiração", "Grounding", "Voltar"]),
-    Estado.RESPIRACAO: ("Respire: Inspire 3s (LED verde), segure 1s (LED amarelo), expire 3s (LED vermelho).\nRepita algumas vezes.", ["Estou melhor", "Continuo ansioso"]),
+    Estado.TIPO_SENTIMENTO: ("Aconteceu algo bom ou ruim?", ["Bom", "Ruim", "Não sei"]),
+    Estado.ESCALA: ("Com que intensidade?", [str(i) for i in range(1, 6)]),
+    Estado.OBRIGADO: ("Obrigado! Até logo.", []),
+    Estado.AJUDA_IMEDIATA: ("Estou aqui com você. Vamos respirar?", ["Respiração", "Grounding", "Voltar"]),
+    Estado.RESPIRACAO: ("Inspire... segure... expire.", ["Estou melhor", "Continuo ansioso"]),
     Estado.GROUNDING: ("Diga 3 coisas que você vê agora.", ["Próxima pergunta", "Voltar"]),
-    Estado.DORMINDO: ("", [])
+    Estado.DORMINDO: ("", []),
 }
+
+# Cores especificas por botao quando o estado e' SELECIONAR_SENTIMENTO
+CORES_SENTIMENTO = [COR_FELIZ, AZUL_MARINHO, COR_TRISTE, COR_ANSIOSO]
+
+# Escala visual: blobs crescentes (5 niveis) com tonalidade
+def _gradiente_escala():
+    """5 cores progressivamente mais intensas para a escala de intensidade."""
+    return [
+        (200, 215, 230),  # leve
+        (130, 200, 230),
+        (60, 180, 220),
+        (240, 130, 80),
+        (230, 60, 80),   # intenso
+    ]
+CORES_ESCALA = _gradiente_escala()
+
 
 class App:
     def __init__(self):
@@ -62,17 +90,16 @@ class App:
         pygame.mouse.set_visible(False)
 
         largura, altura = self.screen.get_size()
-        self.fonte_rosto = pygame.font.SysFont("JandaManateeSolid.ttf", int(altura * 0.8), bold=True)
-        self.fonte_texto = pygame.font.SysFont("Arial", int(altura * 0.1), bold=True)
+        self.fonte_texto = pygame.font.SysFont("Arial", int(altura * 0.07), bold=True)
         self.fonte_botao = "Arial"
 
-        self.face = Face(self.fonte_rosto, self.screen)
+        self.face = Face(self.screen)
 
         self.buttons_cache = {st: criar_botoes(largura, altura, labels) for st, (_, labels) in STATE_CONFIG.items()}
 
         self.estado = Estado.DORMINDO
         self.indice_selecionado = 0
-        self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None, "bpm": None}
+        self.registro = {"sentimento": None, "tipo": None, "escala": None, "sexo": None}
 
         self.tempo = 0.0
         self.tempo_obrigado = 0
@@ -86,10 +113,8 @@ class App:
         self.teclado_ativo = False
         self.ultimo_estado = Estado.DORMINDO
 
-        self.fade_fundo = Transicao(tempo_fade=1.0)
-        self.fade_rosto = Transicao(tempo_fade=1.0)
+        self.fade_fundo = Transicao(tempo_fade=0.8)
         self.cor_fundo_atual = PRETO
-        self.cor_rosto_atual = BRANCO
 
         self.fade_start_ms = pygame.time.get_ticks()
 
@@ -99,7 +124,7 @@ class App:
             self.tempo += dt
             self.handle_events()
             self.update_tempo()
-            self.render()
+            self.render(dt)
 
     def handle_events(self):
         clicked = None
@@ -117,13 +142,13 @@ class App:
 
                 if self.estado in STATE_CONFIG:
                     n = len(self.buttons_cache[self.estado])
-                    if evento.key == pygame.K_LEFT:
+                    if evento.key == pygame.K_LEFT and n > 0:
                         self.teclado_ativo = True
                         self.indice_selecionado = (self.indice_selecionado - 1) % n
-                    elif evento.key == pygame.K_RIGHT:
+                    elif evento.key == pygame.K_RIGHT and n > 0:
                         self.teclado_ativo = True
                         self.indice_selecionado = (self.indice_selecionado + 1) % n
-                    elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER) and n > 0:
                         clicked = self.indice_selecionado
 
                 if self.estado == Estado.OBRIGADO and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
@@ -145,9 +170,10 @@ class App:
         self.teclado_ativo = False
 
         if self.estado == Estado.INICIO:
-            if clicked == 0: self.estado = Estado.SELECIONAR_SENTIMENTO
-            elif clicked == 1: self.estado = Estado.BATIMENTO
-            elif clicked == 2: self.estado = Estado.AJUDA_IMEDIATA
+            if clicked == 0:
+                self.estado = Estado.SELECIONAR_SENTIMENTO
+            elif clicked == 1:
+                self.estado = Estado.AJUDA_IMEDIATA
             self.indice_selecionado = 0
 
         elif self.estado == Estado.SELECIONAR_SENTIMENTO:
@@ -172,20 +198,13 @@ class App:
             self.estado = Estado.DORMINDO
             self.indice_selecionado = 0
 
-        elif self.estado == Estado.BATIMENTO:
-            self.registro['bpm'] = ler_batimentos(10)
-            self.estado = Estado.BATIMENTO_FINALIZADO
-            self.indice_selecionado = 0
-
-        elif self.estado == Estado.BATIMENTO_FINALIZADO:
-            self.estado = Estado.OBRIGADO
-            self.tempo_obrigado = self.tempo
-            self.indice_selecionado = 0
-
         elif self.estado == Estado.AJUDA_IMEDIATA:
-            if clicked == 0: self.estado = Estado.RESPIRACAO
-            elif clicked == 1: self.estado = Estado.GROUNDING
-            elif clicked == 2: self.estado = Estado.INICIO
+            if clicked == 0:
+                self.estado = Estado.RESPIRACAO
+            elif clicked == 1:
+                self.estado = Estado.GROUNDING
+            elif clicked == 2:
+                self.estado = Estado.INICIO
             self.indice_selecionado = 0
 
         elif self.estado in (Estado.RESPIRACAO, Estado.GROUNDING):
@@ -204,30 +223,33 @@ class App:
         if self.estado != Estado.DORMINDO and (self.tempo - self.ultimo_evento > self.segundos_dormir):
             self.estado = Estado.DORMINDO
 
-    def render(self):
+    def render(self, dt):
         estado_mudou = self.estado != self.ultimo_estado
         self.ultimo_estado = self.estado
 
-        if self.estado == Estado.DORMINDO:
-            if estado_mudou or (not self.fade_fundo.is_active() and self.cor_fundo_atual != PRETO):
-                self.fade_fundo.start(self.cor_fundo_atual, PRETO)
-        elif estado_mudou and self.cor_fundo_atual != BRANCO:
-            self.fade_fundo.start(self.cor_fundo_atual, BRANCO)
-
+        # Fundo: branco quando ativo, preto quando dormindo
+        cor_alvo = PRETO if self.estado == Estado.DORMINDO else COR_FUNDO
+        if estado_mudou and self.cor_fundo_atual != cor_alvo:
+            self.fade_fundo.start(self.cor_fundo_atual, cor_alvo)
         nova_cor_fundo, _ = self.fade_fundo.update()
         self.cor_fundo_atual = nova_cor_fundo
 
-        luminancia = sum(self.cor_fundo_atual) / 3
-        self.cor_rosto_atual = PRETO if luminancia > 127 else BRANCO
-
         self.screen.fill(self.cor_fundo_atual)
 
+        # Texto: cor escolhida por luminancia para contraste
+        luminancia = sum(self.cor_fundo_atual) / 3
+        cor_texto = COR_TEXTO if luminancia > 127 else BRANCO
         text, _ = STATE_CONFIG.get(self.estado, ("", []))
-        desenhar_frase(self.screen, self.fonte_texto, text)
+        desenhar_frase(self.screen, self.fonte_texto, text, cor=cor_texto)
 
-        self.face.update(self.tempo, self.falando, dormindo=(self.estado == Estado.DORMINDO), cor=self.cor_rosto_atual)
+        # Rosto
+        dormindo = self.estado == Estado.DORMINDO
+        if estado_mudou:
+            self.face.set_expressao(EXPRESSAO_POR_ESTADO.get(self.estado, "neutro"))
+        self.face.update(dt, self.tempo, falando=self.falando, dormindo=dormindo)
         self.face.desenhar(self.tempo)
 
+        # TTS
         tts_key = TTS_KEYS.get(self.estado, "")
         if tts_key and tts_key != self.ultimo_texto:
             self.tts.speak(tts_key)
@@ -236,7 +258,17 @@ class App:
         elif self.falando and not self.tts.speaking:
             self.falando = False
 
+        # Botoes
         botoes = self.buttons_cache.get(self.estado, [])
         if botoes:
-            desenhar_botoes_fade(self.screen, botoes, self.fonte_botao, self.indice_selecionado, self.fade_start_ms, FADE_T * 1000, DELAY_BTWN * 1000, self.teclado_ativo)
+            cores = None
+            if self.estado == Estado.SELECIONAR_SENTIMENTO:
+                cores = CORES_SENTIMENTO
+            elif self.estado == Estado.ESCALA:
+                cores = CORES_ESCALA
+            desenhar_botoes_fade(
+                self.screen, botoes, self.fonte_botao, self.indice_selecionado,
+                self.fade_start_ms, FADE_T * 1000, DELAY_BTWN * 1000, self.teclado_ativo,
+                cores_por_botao=cores,
+            )
         pygame.display.flip()
