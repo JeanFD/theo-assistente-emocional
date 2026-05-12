@@ -1,4 +1,3 @@
-import pygame
 import time
 
 class Transicao:
@@ -10,14 +9,16 @@ class Transicao:
         self.para = (0, 0, 0)
         self.fracao = 0.0
 
-    def start(self, cor_atual, cor_destino, tempo_atual):
+    def start(self, cor_atual, cor_destino, tempo_atual=None):
         self.transicionando = True
-        self.t0 = tempo_atual
+        self.t0 = tempo_atual if tempo_atual is not None else time.time()
         self.de = cor_atual
         self.para = cor_destino
         self.fracao = 0.0
 
-    def update(self, tempo_atual):
+    def update(self, tempo_atual=None):
+        if tempo_atual is None:
+            tempo_atual = time.time()
         if not self.transicionando:
             return self.para, False
         dt = tempo_atual - self.t0
