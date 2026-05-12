@@ -88,14 +88,10 @@ EXPRESSOES = {
         boca_sx=0.55, boca_sy=1.0,
         folha_rot=-8,
     ),
-    "dormindo": ParametrosRosto(
-        olho_esq_sx=1.35, olho_esq_sy=0.22, olho_esq_rot=-12,
-        olho_dir_sx=1.35, olho_dir_sy=0.22, olho_dir_rot=12,
-        olho_esq_dx=0.025, olho_dir_dx=-0.025,
-        olho_esq_dy=0.01, olho_dir_dy=0.01,
-        boca_sx=0.7, boca_sy=0.5,
-        folha_rot=-22,
-    ),
+    # Dormindo = rosto normal/relaxado, sem deformacao.
+    # O estado "DORMINDO" do app ja escurece a tela; nao precisamos deformar
+    # o rosto para passar a sensacao de descanso.
+    "dormindo": ParametrosRosto(),
 }
 
 
@@ -201,8 +197,8 @@ class Face:
         self.tela_h = h
         # Rosto em pe': tamanhos relativos a altura
         self.h_folha = int(h * 0.16)
-        self.h_olho = int(h * 0.22)
-        self.h_boca = int(h * 0.16)
+        self.h_olho = int(h * 0.17)
+        self.h_boca = int(h * 0.22)
         # Largura proporcional preservada de cada sprite
         def _largura(spr, altura_alvo):
             ow, oh = spr.get_size()
